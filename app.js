@@ -265,7 +265,7 @@ function render() {
     case "/marcas":
       titulo = "Marcas"; sub = S.d.marcas.length + " marcas cadastradas · clique numa marca para abrir a ficha ao lado"; conteudo = telaMarcas(r.id && marca(r.id) ? r.id : ""); acao = botao("Nova marca", "prim", 'data-acao="nova-marca"', "plus");
       break;
-    case "/autorizacoes": titulo = "Autorizações"; sub = "Contratos fechados pelo comercial e suas cotas"; conteudo = telaAutorizacoes(); acao = botao("Nova autorização", "prim", 'data-acao="nova-aut"', "plus"); break;
+    case "/autorizacoes": titulo = "Autorizações"; sub = S.d.autorizacoes.length + " contratos · " + S.d.autorizacoes.filter(temCotas).length + " com cotas · as quantidades são editáveis direto na tabela"; conteudo = telaAutorizacoes(); acao = botao("Nova autorização", "prim", 'data-acao="nova-aut"', "plus"); break;
     case "/fila": titulo = "Fila de materiais"; sub = "O que o atendimento recebeu e ainda não tem data"; conteudo = telaFila(); acao = botao("Entrou material", "prim", 'data-acao="novo-fila"', "plus"); break;
     case "/brand": titulo = "Brand"; sub = "Um card por marca; dentro, cada vídeo e a etapa em que está"; conteudo = telaBrand(); acao = botao("Novo brand", "prim", 'data-acao="novo-brand"', "plus"); break;
     case "/edicao": titulo = "Edição"; sub = "Fila de edição e YouTube (New)"; conteudo = telaEdicao(); acao = botao("Novo material", "prim", 'data-acao="novo-edicao"', "plus"); break;
@@ -433,7 +433,7 @@ function telaMarcas(idSel) {
 function mesesEntre(ini, fim) {
   var a = parseISO(ini) || new Date(new Date().getFullYear(), 0, 1), b = parseISO(fim) || new Date(new Date().getFullYear(), 11, 31);
   var out = []; var d = new Date(a.getFullYear(), a.getMonth(), 1);
-  while (d <= b && out.length < 15) { out.push(d.getFullYear() + "-" + p2(d.getMonth() + 1)); d = new Date(d.getFullYear(), d.getMonth() + 1, 1); }
+  while (d <= b && out.length < 60) { out.push(d.getFullYear() + "-" + p2(d.getMonth() + 1)); d = new Date(d.getFullYear(), d.getMonth() + 1, 1); }
   return out;
 }
 function cobrancasDaMarca(m) {
@@ -543,20 +543,83 @@ function resumoMetricas(e) {
 }
 
 /* ============================================================ tela: autorizações */
+var ORDEM_SIT = ["vencendo", "vigente", "futura", "sem_vigencia", "vencida", "encerrada"];
+var TITULO_SIT = { vencendo: "Vencendo em até 45 dias", vigente: "Vigentes", futura: "Começam depois", sem_vigencia: "Sem vigência informada (conferir com a autorização)", vencida: "Vencidas", encerrada: "Encerradas" };
+function autsSemCotas() { var ordem = { vencendo: 0, vigente: 1, futura: 2, sem_vigencia: 3, vencida: 4, encerrada: 5 }; return S.d.autorizacoes.filter(function (a) { return !a.encerrada && !temCotas(a); }).sort(function (a, b) { return (ordem[situacaoAut(a).id] - ordem[situacaoAut(b).id]) || porNome({ nome: nomeMarca(a.marcaId) }, { nome: nomeMarca(b.marcaId) }) || String(b.inicio || b.rotulo).localeCompare(String(a.inicio || a.rotulo)); }); }
+function brandsNaPlanilha(a) { return S.d.brands.filter(function (b) { return b.autorizacaoId === a.id; }).length; }
 function telaAutorizacoes() {
   var q = S.busca.toLowerCase();
-  var lista = S.d.autorizacoes.slice().filter(function (a) { return !q || nomeMarca(a.marcaId).toLowerCase().indexOf(q) >= 0 || String(a.rotulo || "").toLowerCase().indexOf(q) >= 0; });
-  var ordem = { vencendo: 0, vigente: 1, futura: 2, sem_vigencia: 3, vencida: 4, encerrada: 5 };
-  lista.sort(function (a, b) { var d = ordem[situacaoAut(a).id] - ordem[situacaoAut(b).id]; return d || porNome({ nome: nomeMarca(a.marcaId) }, { nome: nomeMarca(b.marcaId) }); });
-  var semCotas = lista.filter(function (a) { return !temCotas(a); }).length;
-  return '<div class="filtros"><div class="busca">' + icone("search") + '<input class="input" id="busca-aut" placeholder="Buscar marca ou contrato" value="' + attr(S.busca) + '" data-filtro="busca"></div>' +
-    (semCotas ? '<span class="small muted">' + semCotas + " autorizações vieram da planilha sem cotas. Suba o PDF ou cadastre as quantidades para a barrinha funcionar.</span>" : "") + "</div>" +
-    '<div class="card"><div class="corpo sem tabela-wrap"><table class="tabela"><thead><tr><th>Marca</th><th>Autorização</th><th>Vigência</th><th>Situação</th><th>Posts</th><th>Brand</th><th>E-mail</th><th>Revista</th><th>Banner</th><th>Valor</th></tr></thead><tbody>' +
-    lista.map(function (a) {
-      var s = situacaoAut(a), c = consumo(a), t = tempoDecorrido(a);
-      function cel(p) { var x = c[p]; if (!x.contratado) return '<td class="muted">—</td>'; return '<td style="min-width:90px"><div class="small mono">' + fmtNum(x.entregue) + "/" + fmtNum(x.contratado) + "</div>" + barra(x.pct, classeCota(x, t), t) + "</td>"; }
-      return '<tr class="clicavel" data-acao="editar-aut" data-id="' + attr(a.id) + '"><td><strong>' + esc(nomeMarca(a.marcaId)) + "</strong></td><td>" + esc(rotuloAut(a)) + (a.gecom ? '<div class="small muted">Gecom ' + esc(a.gecom) + "</div>" : "") + '</td><td class="nowrap small">' + (a.inicio ? fmtData(a.inicio) + " a " + fmtData(a.fim) : '<span class="muted">conferir</span>') + "</td><td>" + selo(s.nome, s.cls) + "</td>" + cel("post") + cel("brand") + cel("email") + cel("revista") + cel("banner") + '<td class="nowrap small">' + (a.valor ? fmtMoeda(a.valor) : "") + "</td></tr>";
-    }).join("") + "</tbody></table></div></div>";
+  var lista = S.d.autorizacoes.filter(function (a) { return !q || nomeMarca(a.marcaId).toLowerCase().indexOf(q) >= 0 || String(a.rotulo || "").toLowerCase().indexOf(q) >= 0 || String(a.gecom || "").toLowerCase().indexOf(q) >= 0; });
+  var f = S.filtroAut || "ativas";
+  lista = lista.filter(function (a) { var sid = situacaoAut(a).id; if (f === "ativas") return sid !== "encerrada" && sid !== "vencida"; if (f === "vencidas") return sid === "vencida" && alertasAut(a).length; if (f === "sem") return sid !== "encerrada" && !temCotas(a); if (f === "encerradas") return sid === "encerrada"; return true; });
+  var semCotas = autsSemCotas().length;
+  var topo = '<div class="filtros"><div class="busca">' + icone("search") + '<input class="input" id="busca-aut" placeholder="Buscar marca, contrato ou Gecom" value="' + attr(S.busca) + '" data-filtro="busca"></div>' +
+    '<div class="chips">' + [["ativas", "Ativas"], ["vencidas", "Vencidas com saldo"], ["sem", "Sem cotas (" + semCotas + ")"], ["encerradas", "Encerradas"], ["todas", "Todas"]].map(function (o) { return '<button type="button" class="chip' + (f === o[0] ? " ativo" : "") + '" data-acao="filtro-aut" data-v="' + o[0] + '">' + o[1] + "</button>"; }).join("") + "</div>" +
+    '<div class="chips" style="margin-left:auto"><button type="button" class="chip' + (S.visaoAut !== "tempo" ? " ativo" : "") + '" data-acao="visao-aut" data-v="tabela">Tabela</button><button type="button" class="chip' + (S.visaoAut === "tempo" ? " ativo" : "") + '" data-acao="visao-aut" data-v="tempo">Linha do tempo</button></div>' +
+    (semCotas ? botao("Cadastrar em sequência (" + semCotas + ")", "p preto", 'data-acao="seq-iniciar"', "arrow-right") : "") + "</div>";
+  return topo + (S.visaoAut === "tempo" ? autLinhaDoTempo(lista) : autTabela(lista));
+}
+function cotaInline(a, p, c) {
+  var k = c[p]; var v = (a.cotas || {})[p];
+  return '<td class="cota-cel"><span class="ent mono">' + (k.entregue ? fmtNum(k.entregue) : "0") + '</span><span class="muted">/</span><input class="cota-inline" type="number" min="0" step="1" value="' + (v || "") + '" placeholder="—" data-cota-aut="' + attr(a.id) + '" data-cota-produto="' + p + '" aria-label="' + attr(PRODUTOS[p].nome) + '">' + (k.contratado ? barra(k.pct, classeCota(k, tempoDecorrido(a)), tempoDecorrido(a)) : "") + "</td>";
+}
+function autTabela(lista) {
+  var grupos = {}; lista.forEach(function (a) { var sid = situacaoAut(a).id; (grupos[sid] = grupos[sid] || []).push(a); });
+  var html = ORDEM_SIT.filter(function (sid) { return grupos[sid]; }).map(function (sid) {
+    var itens = grupos[sid].sort(function (a, b) { return (sid === "vencendo" || sid === "vencida" ? String(a.fim || "").localeCompare(String(b.fim || "")) : 0) || porNome({ nome: nomeMarca(a.marcaId) }, { nome: nomeMarca(b.marcaId) }); });
+    var cls = sid === "vencendo" ? "alerta" : sid === "vencida" ? "erro" : sid === "sem_vigencia" ? "info" : "";
+    return '<div class="card aut-grupo"><div class="aut-grupo-cab ' + cls + '">' + esc(TITULO_SIT[sid]) + ' <span class="muted">· ' + itens.length + '</span></div><div class="tabela-wrap"><table class="tabela aut-tabela"><thead><tr><th>Marca · contrato</th><th>Vigência</th><th>Posts</th><th>Brand</th><th>E-mail</th><th>Revista</th><th>Banner</th><th>Saldo</th><th></th></tr></thead><tbody>' +
+      itens.map(function (a) {
+        var c = consumo(a); var st = situacaoAut(a); var hoje = hojeISO();
+        var saldo = temCotas(a) ? ORDEM_PRODUTOS.filter(function (p) { return c[p].saldo; }).map(function (p) { return fmtNum(c[p].saldo) + " " + (p === "banner" ? "impr." : PRODUTOS[p].curto.toLowerCase() + (c[p].saldo > 1 && p !== "email" ? "s" : "")); }).join(", ") || '<span class="selo ok">completo</span>' : '<span class="muted small">cadastre as cotas ao lado</span>';
+        var dias = a.fim ? diasEntre(hoje, a.fim) : null;
+        var vig = a.inicio ? fmtData(a.inicio).slice(0, 5) + "/" + a.inicio.slice(2, 4) + " a " + fmtData(a.fim).slice(0, 5) + "/" + a.fim.slice(2, 4) : '<button type="button" class="chip" data-acao="editar-aut" data-id="' + attr(a.id) + '">informar datas</button>';
+        var vigSub = dias == null ? "" : dias < 0 ? '<div class="small" style="color:var(--erro)">venceu há ' + (-dias) + " dias</div>" : dias <= 60 ? '<div class="small" style="color:var(--alerta)">vence em ' + dias + " dias</div>" : "";
+        var pod = (sid === "vencendo" || sid === "vigente" || sid === "vencida") && !S.d.autorizacoes.some(function (x) { return x.renovaDe === a.id; });
+        return '<tr><td><strong>' + esc(nomeMarca(a.marcaId)) + '</strong><div class="small muted">' + esc(rotuloAut(a)) + (a.gecom ? " · Gecom " + esc(a.gecom) : "") + (brandsNaPlanilha(a) && !(a.cotas || {}).brand ? ' · <span style="color:var(--info)">' + brandsNaPlanilha(a) + " brand na planilha</span>" : "") + '</div></td><td class="nowrap small">' + vig + vigSub + "</td>" + ORDEM_PRODUTOS.map(function (p) { return cotaInline(a, p, c); }).join("") + '<td class="small">' + saldo + '</td><td class="nowrap"><span class="row" style="gap:4px;flex-wrap:nowrap">' + (pod ? botao("Renovar", "p", 'data-acao="renovar-aut" data-id="' + attr(a.id) + '"', "arrow-right") : "") + botao("", "p icone", 'data-acao="editar-aut" data-id="' + attr(a.id) + '" aria-label="Editar"', "pencil") + "</span></td></tr>";
+      }).join("") + "</tbody></table></div></div>";
+  }).join("");
+  return html || '<div class="vazio">Nenhuma autorização nesse filtro.</div>';
+}
+function autLinhaDoTempo(lista) {
+  var hoje = hojeISO(); var comData = lista.filter(function (a) { return a.inicio && a.fim; }); var semData = lista.filter(function (a) { return !a.inicio || !a.fim; });
+  var ini = somaDias(hoje, -600), fim = somaDias(hoje, 420);
+  comData.forEach(function (a) { if (a.inicio < ini) ini = a.inicio; if (a.fim > fim) fim = a.fim; });
+  if (diasEntre(ini, fim) > 1500) ini = somaDias(hoje, -720);
+  var total = diasEntre(ini, fim); var pct = function (iso) { return Math.max(0, Math.min(100, diasEntre(ini, iso) / total * 100)); };
+  var todosMeses = mesesEntre(ini, fim); var passo = Math.max(1, Math.ceil(todosMeses.length / 9)); var meses = todosMeses.filter(function (m, i) { return i % passo === 0; });
+  var porMarca = {}; comData.forEach(function (a) { (porMarca[a.marcaId] = porMarca[a.marcaId] || []).push(a); });
+  var ids = Object.keys(porMarca).sort(function (a, b) { return porNome({ nome: nomeMarca(a) }, { nome: nomeMarca(b) }); });
+  var linhas = ids.map(function (mid) {
+    var auts = porMarca[mid].sort(function (a, b) { return a.inicio.localeCompare(b.inicio); });
+    return '<div class="tl-rot"><a href="#/marcas/' + mid + '">' + esc(nomeMarca(mid)) + '</a></div><div class="tl-trilho">' + auts.map(function (a) {
+      var st = situacaoAut(a); var c = consumo(a); var cls = st.id === "vencida" && alertasAut(a).length ? "vencida" : (st.id === "vencida" || st.id === "encerrada") ? "passada" : !temCotas(a) ? "sem" : alertasAut(a).length ? "atrasada" : "ok";
+      var cc = ORDEM_PRODUTOS.filter(function (p) { return c[p].contratado; }).map(function (p) { return PRODUTOS[p].curto + " " + fmtNum(c[p].entregue) + "/" + fmtNum(c[p].contratado); }).slice(0, 2).join(" · ");
+      var left = pct(a.inicio), w = Math.max(1.5, pct(a.fim) - left);
+      return '<button type="button" class="tl-barra ' + cls + '" style="left:' + left + "%;width:" + w + '%" data-acao="editar-aut" data-id="' + attr(a.id) + '" title="' + attr(rotuloAut(a) + " · " + fmtData(a.inicio) + " a " + fmtData(a.fim) + (cc ? " · " + cc : "")) + '">' + esc(rotuloAut(a)) + (cc ? ' <span class="cc">· ' + esc(cc) + "</span>" : (temCotas(a) ? "" : ' <span class="cc">· sem cotas</span>')) + "</button>";
+    }).join("") + "</div>";
+  }).join("");
+  return '<div class="card"><div class="corpo"><div class="tl-cab" style="grid-template-columns:130px 1fr"><span></span><div class="tl-meses">' + meses.map(function (m) { return '<span style="left:' + pct(m + "-01") + '%" class="' + (m === hoje.slice(0, 7) ? "hoje" : "") + '">' + esc(nomeMesCurto(m)) + "</span>"; }).join("") + "</div></div>" +
+    '<div class="tl-grade" style="grid-template-columns:130px 1fr"><div class="tl-hoje" style="left:calc(130px + (100% - 130px) * ' + (pct(hoje) / 100).toFixed(4) + ')"></div>' + (linhas || '<div class="vazio" style="grid-column:1/-1">Nenhuma autorização com datas nesse filtro.</div>') + "</div>" +
+    '<div class="legenda mt3"><span><i style="background:var(--ok-bg);border:1px solid var(--ok)"></i>em dia</span><span><i style="background:var(--alerta-bg);border:1px solid var(--alerta)"></i>atrasada ou vencendo</span><span><i style="background:var(--erro-bg);border:1px solid var(--erro)"></i>vencida com saldo</span><span><i style="background:var(--muted-bg)"></i>passada</span><span><i style="border:1px dashed var(--borda-forte)"></i>sem cotas</span></div>' +
+    (semData.length ? '<div class="small muted mt3">Sem datas (não aparecem na linha): ' + semData.map(function (a) { return '<button type="button" class="chip" data-acao="editar-aut" data-id="' + attr(a.id) + '">' + esc(nomeMarca(a.marcaId)) + " · " + esc(rotuloAut(a)) + "</button>"; }).join(" ") + "</div>" : "") + "</div></div>";
+}
+/* renovar: cria a autorização seguinte copiando as cotas, com a vigência avançada em um ano */
+function renovarAut(a) {
+  var ini = a.fim ? somaDias(a.fim, 1) : null; var fimN = ini ? somaDias(ini, 364) : null;
+  var ano = fimN ? fimN.slice(0, 4) : String(new Date().getFullYear() + 1);
+  var novo = { marcaId: a.marcaId, rotulo: ano, gecom: "", inicio: ini, fim: fimN, valor: a.valor || null, pagamento: a.pagamento || "", contato: a.contato || "", cotas: clone(a.cotas || {}), obs: "Renovação de " + rotuloAut(a) + ". O saldo do contrato anterior não passa para este.", renovaDe: a.id, origem: "renovação" };
+  S.dialogo = { tipo: "aut", item: novo, novoDeRenovacao: true }; render();
+}
+/* cadastrar em sequência: percorre as autorizações sem cotas */
+function iniciarSequencia() {
+  var ids = autsSemCotas().map(function (a) { return a.id; }); if (!ids.length) return toast("Todas as autorizações já têm cotas.");
+  abrirSequencia(ids, 0);
+}
+function abrirSequencia(ids, i) {
+  while (i < ids.length && !aut(ids[i])) i++;
+  if (i >= ids.length) { S.dialogo = null; toast("Fim da sequência."); return render(); }
+  S.dialogo = { tipo: "aut", item: clone(aut(ids[i])), sequencia: { ids: ids, i: i } }; render();
 }
 
 /* ============================================================ tela: fila de materiais */
@@ -789,17 +852,22 @@ function formMarca(d) {
 }
 function formAut(d) {
   var a = d.item || { marcaId: d.marcaId || "", rotulo: "", gecom: "", inicio: "", fim: "", valor: "", pagamento: "", contato: "", cotas: {}, obs: "" };
-  var c = a.cotas || {};
-  return '<form class="dialogo" data-form="aut">' + cabDialogo(a.id ? "Editar autorização" : "Nova autorização", "O que o comercial fechou com a marca e o que a revista deve entregar") + '<div class="corpo">' +
+  var c = a.cotas || {}; var seq = d.sequencia; var sugBrand = a.id && !c.brand ? brandsNaPlanilha(a) : 0;
+  var titulo = seq ? "Cadastrar cotas · " + (seq.i + 1) + " de " + seq.ids.length : d.novoDeRenovacao ? "Renovar autorização" : a.id ? "Editar autorização" : "Nova autorização";
+  var sub = seq ? nomeMarca(a.marcaId) + " · " + rotuloAut(a) + ". Preencha as cotas e as datas e clique em Salvar e próxima." : d.novoDeRenovacao ? "Cotas copiadas do contrato anterior e vigência avançada em um ano. Confira e ajuste." : "O que o comercial fechou com a marca e o que a revista deve entregar";
+  return '<form class="dialogo" data-form="aut">' + cabDialogo(titulo, sub) + '<div class="corpo">' +
+    (seq ? '<div class="barra"><i class="ok" style="width:' + Math.round(seq.i / seq.ids.length * 100) + '%"></i></div>' : "") +
+    (sugBrand ? '<div class="alerta-box info">' + icone("info") + '<span class="t">A planilha tem ' + sugBrand + " vídeo" + (sugBrand > 1 ? "s" : "") + " de brand ligado" + (sugBrand > 1 ? "s" : "") + " a esta autorização. Deixei esse número sugerido na cota de Brand; confira com o contrato.</span></div>" : "") +
     (a.id ? "" : '<div class="drop" data-acao="escolher-pdf">' + icone("file-up", "") + " Subir o PDF da autorização para preencher sozinho (Gecom, vigência, valor e cotas). Depois é só conferir.<input type=\"file\" accept=\"application/pdf\" class=\"sr-only\" id=\"pdf-aut\" data-acao-arquivo=\"ler-pdf\"></div>" + (d.lendo ? '<div class="small muted">Lendo o PDF...</div>' : "") + (d.avisoPdf ? '<div class="alerta-box ' + (d.avisoPdfTipo || "alerta") + '">' + icone("info") + '<span class="t">' + esc(d.avisoPdf) + "</span></div>" : "")) +
     '<div class="grid g2">' + campo("Marca", select("marcaId", opcoesMarcas("Escolha"), a.marcaId, "required")) + campo("Nome da autorização", input("rotulo", a.rotulo, "text", 'placeholder="Ex.: Gecom 104-25 (2025/2026)"'), "Como vocês chamam esse contrato") + "</div>" +
     '<div class="grid g3">' + campo("Gecom", input("gecom", a.gecom)) + campo("Início da vigência", input("inicio", a.inicio, "date")) + campo("Fim da vigência", input("fim", a.fim, "date")) + "</div>" +
     '<div class="grid g2">' + campo("Valor total líquido (R$)", input("valor", a.valor, "number", 'step="0.01" min="0"')) + campo("Forma de pagamento", input("pagamento", a.pagamento, "text", 'placeholder="12 x R$ 5.000,00"')) + "</div>" +
     campo("Contato na marca", input("contato", a.contato)) +
-    '<h3 style="font-size:13px">Cotas contratadas</h3><div class="grid g5">' + ORDEM_PRODUTOS.map(function (p) { return campo(PRODUTOS[p].curto, input("cota_" + p, c[p] || "", "number", 'min="0" step="1"'), PRODUTOS[p].unidade); }).join("") + "</div>" +
+    '<h3 style="font-size:13px">Cotas contratadas</h3><div class="grid g5">' + ORDEM_PRODUTOS.map(function (p) { return campo(PRODUTOS[p].curto, input("cota_" + p, c[p] || (p === "brand" && sugBrand ? sugBrand : ""), "number", 'min="0" step="1"'), PRODUTOS[p].unidade); }).join("") + "</div>" +
     campo("Observações", textarea("obs", a.obs), "Ex.: posts são 12 em cada rede; banner de 540 mil pageviews") +
     (a.pdfNome ? '<div class="small muted">PDF: ' + esc(a.pdfNome) + "</div>" : "") + '<input type="hidden" name="pdfNome" value="' + attr(a.pdfNome || "") + '">' +
-    "</div>" + peForm("Salvar autorização", a.id ? 'data-acao="apagar-aut" data-id="' + attr(a.id) + '"' : "") + "</form>";
+    '<input type="hidden" name="renovaDe" value="' + attr(a.renovaDe || "") + '">' +
+    "</div>" + (seq ? '<div class="pe">' + botao("Sair da sequência", "fantasma esq", 'data-acao="fechar"') + botao("Pular", "", 'data-acao="seq-pular"') + '<button type="submit" class="btn prim">Salvar e próxima</button></div>' : peForm(d.novoDeRenovacao ? "Criar renovação" : "Salvar autorização", a.id && !seq ? 'data-acao="apagar-aut" data-id="' + attr(a.id) + '"' : "")) + "</form>";
 }
 function fichaBrand(d) {
   var b = d.item;
@@ -1013,8 +1081,10 @@ function aoSubmeter(ev) {
   if (tipo === "aut") {
     item.id = item.id || uid("aut"); item.marcaId = f.marcaId; item.rotulo = f.rotulo || ((f.inicio ? fmtData(f.inicio).slice(3) : "") + (f.fim ? " a " + fmtData(f.fim).slice(3) : "")) || "Autorização"; item.gecom = f.gecom; item.inicio = f.inicio || null; item.fim = f.fim || null; item.valor = num(f.valor); item.pagamento = f.pagamento; item.contato = f.contato; item.obs = f.obs; item.pdfNome = f.pdfNome || item.pdfNome || null;
     item.cotas = {}; ORDEM_PRODUTOS.forEach(function (p) { var v = num(f["cota_" + p]); if (v) item.cotas[p] = v; });
+    if (f.renovaDe) item.renovaDe = f.renovaDe; if (!item.origem) item.origem = d.novoDeRenovacao ? "renovação" : "cadastro manual";
     if (!item.marcaId) return toast("Escolha a marca.", true);
-    return salvar("autorizacoes", item, "Autorização salva.").then(function () { S.fichaAut = item.id; render(); });
+    var seqAut = d.sequencia;
+    return API.salvar("autorizacoes", item).then(function () { S.fichaAut = item.id; if (seqAut) { toast("Salvo. Próxima."); abrirSequencia(seqAut.ids, seqAut.i + 1); } else { toast("Autorização salva."); S.dialogo = null; render(); } }).catch(function (e) { toast("Não salvou: " + e.message, true); });
   }
   if (tipo === "brand") {
     var novo = !item.id; item.id = item.id || uid("brand");
@@ -1070,6 +1140,11 @@ function aoClicar(ev) {
     case "fechar-gaveta": if (ev.target === el) { S.gavetaAberta = false; render(); } return;
     case "tema": var novo = temaAtual() === "escuro" ? "claro" : "escuro"; document.documentElement.setAttribute("data-tema", novo); try { localStorage.setItem("drc-tema", novo); } catch (e) {} S.gavetaAberta = false; return render();
     case "filtro-marcas": S.filtroMarcas = v; return render();
+    case "filtro-aut": S.filtroAut = v; return render();
+    case "visao-aut": S.visaoAut = v; return render();
+    case "renovar-aut": return renovarAut(aut(id));
+    case "seq-iniciar": return iniciarSequencia();
+    case "seq-pular": { var sq = S.dialogo && S.dialogo.sequencia; if (sq) abrirSequencia(sq.ids, sq.i + 1); return; }
     case "filtro-fila": S.filtroFila = v; return render();
     case "filtro-ed-status": S.filtroEdicaoStatus = v; return render();
     case "ficha-aut": S.fichaAut = id; return render();
@@ -1151,6 +1226,12 @@ function aoMudar(ev) {
     var img = el.files[0]; if (!img) return;
     return reduzirImagem(img, 1200).then(function (dataUrl) { var it = lerFormParaItem(el.closest("form")); it.imagem = dataUrl; S.dialogo.item = it; render(); }).catch(function () { toast("Não consegui ler a imagem.", true); });
   }
+  var cotaAut = el.getAttribute && el.getAttribute("data-cota-aut");
+  if (cotaAut) {
+    var ca = clone(aut(cotaAut)); if (!ca) return; ca.cotas = ca.cotas || {}; var pv = num(el.value); var pr = el.getAttribute("data-cota-produto");
+    if (pv) ca.cotas[pr] = pv; else delete ca.cotas[pr];
+    return API.salvar("autorizacoes", ca).then(function () { toast(nomeMarca(ca.marcaId) + ": cota de " + PRODUTOS[pr].curto.toLowerCase() + (pv ? " = " + fmtNum(pv) : " removida") + "."); render(); });
+  }
   if (!filtro) return;
   var val = el.value;
   switch (filtro) {
@@ -1179,7 +1260,7 @@ function reduzirImagem(file, max) {
 document.addEventListener("click", aoClicar);
 document.addEventListener("submit", aoSubmeter);
 document.addEventListener("input", function (ev) { var f = ev.target.getAttribute && ev.target.getAttribute("data-filtro"); if (f === "busca") aoMudar(ev); });
-document.addEventListener("change", function (ev) { var f = ev.target.getAttribute && (ev.target.getAttribute("data-filtro") || ev.target.getAttribute("data-acao-arquivo")); if (f && f !== "busca") aoMudar(ev); });
+document.addEventListener("change", function (ev) { var f = ev.target.getAttribute && (ev.target.getAttribute("data-filtro") || ev.target.getAttribute("data-acao-arquivo") || ev.target.getAttribute("data-cota-aut")); if (f && f !== "busca") aoMudar(ev); });
 var rotaAnterior = rota().caminho;
 window.addEventListener("hashchange", function () { var agora = rota().caminho; if (agora !== rotaAnterior) S.busca = ""; rotaAnterior = agora; S.gavetaAberta = false; render(); });
 document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && S.dialogo) fechar(); });

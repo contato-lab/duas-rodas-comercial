@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 var CHAVE = "drc-tutorial-visto";
-var VERSAO_TUTORIAL = 3;
+var VERSAO_TUTORIAL = 4;
 
 /* ============================================================ passos do passeio
    rota: para onde ir antes de mostrar o passo. alvo: lista de seletores; usa o primeiro que existir e estiver visível.
@@ -29,8 +29,10 @@ var PASSOS = [
     texto: "Posts, Brand, E-mail, Revista e Banner, cada um com entregue de contratado e o que falta. Clique na caixa para ver só aquele produto: a barrinha, o ritmo necessário para fechar no prazo e a lista de entregas com os números." },
   { rota: "#/marcas/__MARCA__", alvo: [".ficha-abas"], titulo: "Linha do ano, Cobranças e Contrato",
     texto: "Linha do ano mostra mês a mês o que saiu de cada produto e os meses vazios, que é a visão de defesa. Cobranças guarda cada vez que a revista cobrou a marca, com data. Contrato traz os dados da autorização." },
-  { rota: "#/autorizacoes", alvo: ['[data-acao="nova-aut"]'], titulo: "Cadastrar uma autorização",
-    texto: "Quando o Marconi fechar um contrato novo, clique aqui. Dá para subir o PDF da autorização: se o PDF tiver texto, a plataforma lê Gecom, vigência, valor e cotas sozinha. Se for escaneado, preencha à mão olhando o documento. Sem as cotas, a barrinha da marca não funciona." },
+  { rota: "#/autorizacoes", alvo: [".aut-tabela"], titulo: "Autorizações: a tabela",
+    texto: "Os contratos agrupados por situação: vencendo primeiro, depois vigentes, vencidas. Cada linha mostra entregue e contratado por produto. Os números tracejados são as cotas, editáveis direto na linha: clicou, digitou, saiu do campo, salvou. Renovar cria o contrato do ano seguinte copiando as cotas, sem carregar saldo." },
+  { rota: "#/autorizacoes", alvo: ['[data-acao="seq-iniciar"]', '[data-acao="visao-aut"][data-v="tempo"]'], titulo: "Cadastrar em sequência e linha do tempo",
+    texto: "Cadastrar em sequência percorre uma a uma as autorizações que vieram da planilha sem quantidades, já sugerindo a cota de brand pelo que a planilha mostra. Linha do tempo troca a tabela por barras no calendário: dá para ver renovação, sobreposição e quem está perto do fim. Nova autorização, no topo, aceita o PDF e lê Gecom, vigência, valor e cotas quando o PDF tem texto." },
   { rota: "#/fila", alvo: ['[data-acao="novo-fila"]'], titulo: "Fila de materiais",
     texto: "O atendimento registra aqui tudo que a marca mandou: o que é, o link do arquivo no Drive e o link parametrizado. Nada mais se perde no WhatsApp. Igor e Isa clicam em Dar data, e o material vira uma entrega programada no calendário. Quando sair, basta marcar como publicado." },
   { rota: "#/brand", alvo: [".brand-card"], titulo: "Brand: um card por marca",
@@ -58,7 +60,9 @@ var GUIA = [
     "Se tiver o PDF da autorização, clique na área cinza e escolha o arquivo. Se o PDF tiver texto, os campos são preenchidos sozinhos. Confira cada um.",
     "Se o PDF for escaneado (foto), preencha à mão: nome da autorização (ex.: Gecom 104-25), início e fim da vigência, valor e as cotas de cada produto.",
     "As cotas são o coração da plataforma: posts, brands, disparos de e-mail, páginas de revista e impressões de banner. Sem elas a barrinha não funciona.",
-    "Salve. A autorização aparece como chip na ficha da marca." ] },
+    "Salve. A autorização aparece como chip na ficha da marca.",
+    "Para corrigir só as quantidades, não precisa abrir o formulário: em Autorizações, digite direto nos números tracejados da tabela.",
+    "Para renovar um contrato, clique em Renovar na linha dele: a plataforma cria o do ano seguinte com as mesmas cotas e a vigência avançada; o saldo antigo não passa." ] },
   { titulo: "Registrar uma entrega (post, e-mail, página, banner)", passos: [
     "Abra a ficha da marca (Marcas, clique no nome) e escolha o chip da autorização certa.",
     "Clique na caixa do produto (Posts, E-mail, Revista ou Banner) e depois em Registrar.",
