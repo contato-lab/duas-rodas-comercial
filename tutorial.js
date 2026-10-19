@@ -63,7 +63,7 @@ var GUIA = [
     "Abra a ficha da marca (Marcas, clique no nome) e escolha o chip da autorização certa.",
     "Clique na caixa do produto (Posts, E-mail, Revista ou Banner) e depois em Registrar.",
     "Escolha o produto, a data e escreva o título. Cole o link do post e, se já tiver, os números (visualizações, alcance, curtidas).",
-    "Se quiser que o print apareça no relatório, suba a imagem em Print para o relatório.",
+    "Para o print aparecer no relatório: tire o print do post ou dos Insights, abra a entrega e cole com Cmd + V (ou arraste a imagem, ou escolha o arquivo).",
     "Situação Publicado conta na cota. Situação Programado só aparece no calendário, sem contar.",
     "Salve. A barrinha da marca atualiza na hora." ] },
   { titulo: "Material que a marca mandou (fila)", passos: [

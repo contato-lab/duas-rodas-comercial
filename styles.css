@@ -349,3 +349,9 @@ html[data-tema="escuro"] .ano-cel.cheia.post{background:#1E3A8A;color:#BFDBFE}ht
 .ano-cel.cob{background:transparent;color:var(--alerta)}
 .ano-tot{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;font-size:11px}
 .ano-tot.alerta{color:var(--alerta)}.ano-tot.ok{color:var(--ok)}
+
+/* colar print na entrega */
+.colar-print{border:2px dashed var(--borda-forte);border-radius:var(--raio);padding:14px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;font-size:13px;background:var(--muted-bg)}
+.colar-print.com-imagem{border-style:solid;background:var(--card)}
+.colar-print.arrastando{border-color:var(--vermelho);background:var(--vermelho-suave)}
+.colar-print img{max-height:180px;max-width:100%;border-radius:8px;box-shadow:var(--sombra)}

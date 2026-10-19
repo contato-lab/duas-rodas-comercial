@@ -849,7 +849,7 @@ function formEntrega(d) {
     campo("Título ou descrição", input("titulo", e.titulo, "text", 'placeholder="Ex.: AGV e Dainese com nova distribuição no Brasil"')) +
     (e.produto === "post" ? campo("Rede", select("rede", Object.keys(REDES).map(function (k) { return [k, REDES[k]]; }), e.rede)) : "") +
     campo("Link", input("link", e.link, "url")) + metricas +
-    campo("Print para o relatório", '<div class="row"><label class="btn p">' + icone("upload") + (e.imagem ? "Trocar imagem" : "Escolher imagem") + '<input type="file" accept="image/*" class="sr-only" data-acao-arquivo="imagem-entrega"></label>' + (e.imagem ? '<img src="' + attr(e.imagem) + '" alt="" style="height:54px;border-radius:6px">' + botao("Tirar", "p fantasma", 'data-acao="tirar-imagem"') : "") + '</div><input type="hidden" name="imagem" value="' + attr(e.imagem || "") + '">', "Print do post ou da página. Fica guardado com a entrega e entra na tela do relatório.") +
+    campo("Print para o relatório", '<div class="colar-print' + (e.imagem ? " com-imagem" : "") + '">' + (e.imagem ? '<img src="' + attr(e.imagem) + '" alt="">' : '<span class="muted">' + icone("upload", "ic") + ' Tire o print e cole aqui com <b>Cmd + V</b> (ou arraste a imagem)</span>') + '<div class="row"><label class="btn p">' + icone("upload") + (e.imagem ? "Trocar" : "Escolher arquivo") + '<input type="file" accept="image/*" class="sr-only" data-acao-arquivo="imagem-entrega"></label>' + (e.imagem ? botao("Tirar", "p fantasma", 'data-acao="tirar-imagem"') : "") + '</div></div><input type="hidden" name="imagem" value="' + attr(e.imagem || "") + '">', "Print do post, dos Insights ou da página. Fica guardado com a entrega e entra na tela do relatório.") +
     campo("Observações", textarea("obs", e.obs)) +
     "</div>" + peForm("Salvar entrega", e.id ? 'data-acao="apagar-entrega" data-id="' + attr(e.id) + '"' : "") + "</form>";
 }
@@ -1183,6 +1183,18 @@ document.addEventListener("change", function (ev) { var f = ev.target.getAttribu
 var rotaAnterior = rota().caminho;
 window.addEventListener("hashchange", function () { var agora = rota().caminho; if (agora !== rotaAnterior) S.busca = ""; rotaAnterior = agora; S.gavetaAberta = false; render(); });
 document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && S.dialogo) fechar(); });
+function imagemParaEntrega(file) {
+  var form = document.querySelector('form[data-form="entrega"]'); if (!form || !file || !/^image\//.test(file.type)) return false;
+  reduzirImagem(file, 1200).then(function (dataUrl) { var it = lerFormParaItem(form); it.imagem = dataUrl; S.dialogo.item = it; render(); toast("Print colado na entrega."); }).catch(function () { toast("Não consegui ler a imagem.", true); });
+  return true;
+}
+document.addEventListener("paste", function (ev) {
+  if (!S.dialogo || S.dialogo.tipo !== "entrega") return;
+  var itens = (ev.clipboardData && ev.clipboardData.items) || []; for (var i = 0; i < itens.length; i++) { if (itens[i].kind === "file" && /^image\//.test(itens[i].type)) { if (imagemParaEntrega(itens[i].getAsFile())) { ev.preventDefault(); return; } } }
+});
+document.addEventListener("dragover", function (ev) { if (S.dialogo && S.dialogo.tipo === "entrega") { ev.preventDefault(); var z = document.querySelector(".colar-print"); if (z) z.classList.add("arrastando"); } });
+document.addEventListener("dragleave", function () { var z = document.querySelector(".colar-print"); if (z) z.classList.remove("arrastando"); });
+document.addEventListener("drop", function (ev) { if (!S.dialogo || S.dialogo.tipo !== "entrega") return; ev.preventDefault(); var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0]; imagemParaEntrega(f); });
 render();
 API = window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.projectId ? criarApiFirebase(window.FIREBASE_CONFIG) : criarApiLocal();
 API.carregar().then(function (d) {
