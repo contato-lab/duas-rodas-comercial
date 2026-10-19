@@ -360,10 +360,8 @@ function telaInicio() {
   sits.sort(function (a, b) { return (ordem[a.id] - ordem[b.id]) || porNome(a.marca, b.marca); });
   var n = function (id) { return sits.filter(function (x) { return x.id === id; }).length; };
   var vigentes = sits.filter(function (x) { return x.vigentes.length; }).length;
-  var kpis = '<div class="grid g4">' + indicador("Marcas com contrato vigente", vigentes) +
-    '<div class="indicador ok"><span class="valor">' + n("ok") + '</span><span class="rot">Em dia</span></div>' +
-    '<div class="indicador alerta"><span class="valor">' + n("atrasada") + '</span><span class="rot">Atrasadas no pacote</span></div>' +
-    '<div class="indicador' + (n("vencida") ? " destaque" : "") + '"><span class="valor">' + n("vencida") + '</span><span class="rot">Vencidas com saldo</span></div></div>';
+  function kpi(cls, valor, rot, filtro) { return '<button type="button" class="indicador clicavel ' + cls + '" data-acao="kpi" data-v="' + filtro + '"><span class="valor">' + valor + '</span><span class="rot">' + esc(rot) + '</span><span class="ver">Ver marcas ' + icone("chevron-right", "ic") + "</span></button>"; }
+  var kpis = '<div class="grid g4">' + kpi("", vigentes, "Marcas com contrato vigente", "vigentes") + kpi("ok", n("ok"), "Em dia", "ok") + kpi("alerta", n("atrasada"), "Atrasadas no pacote", "atrasada") + kpi(n("vencida") ? "destaque" : "", n("vencida"), "Vencidas com saldo", "vencida") + "</div>";
   var semCotas = sits.filter(function (x) { return x.id === "sem_cotas"; });
   var semaforo = '<div class="semaforo">' + sits.filter(function (x) { return x.id !== "sem_cotas"; }).map(function (x) {
     var a = x.alvo, cotas = "";
@@ -659,6 +657,7 @@ function dialogo() {
     case "alocar": html = formAlocar(d); break;
     case "edicao": html = formEdicao(d); break;
     case "ajuda": html = window.Tutorial ? window.Tutorial.htmlAjuda(d.secao) : ""; break;
+    case "kpi": html = dialogoKpi(d.filtro); break;
     case "confirmar": html = '<div class="dialogo"><div class="cab"><h2>' + esc(d.titulo) + '</h2></div><div class="corpo"><p style="margin:0">' + esc(d.texto) + '</p></div><div class="pe">' + botao("Cancelar", "", 'data-acao="fechar"') + botao(d.botao || "Confirmar", "perigo", 'data-acao="confirmar-ok"') + "</div></div>"; break;
   }
   return '<div class="fundo" data-acao="fechar-fundo">' + html + "</div>";
@@ -666,6 +665,19 @@ function dialogo() {
 function cabDialogo(titulo, sub) { return '<div class="cab"><div><h2>' + esc(titulo) + "</h2>" + (sub ? '<div class="sub">' + esc(sub) + "</div>" : "") + "</div>" + botao("", "icone fantasma", 'data-acao="fechar" aria-label="Fechar"', "x") + "</div>"; }
 function peForm(salvar, apagarAttr) { return '<div class="pe">' + (apagarAttr ? botao("Excluir", "fantasma perigo esq", apagarAttr, "trash") : "") + botao("Cancelar", "", 'data-acao="fechar"') + '<button type="submit" class="btn prim">' + esc(salvar || "Salvar") + "</button></div>"; }
 
+var KPI_TITULOS = { vigentes: ["Marcas com contrato vigente", "Têm pelo menos uma autorização dentro da vigência hoje."], ok: ["Marcas em dia", "Entregas acompanhando o tempo do contrato, sem produto atrasado."], atrasada: ["Marcas atrasadas no pacote", "Algum produto está 25 pontos ou mais abaixo do tempo já passado do contrato. Hora de cobrar material."], vencida: ["Marcas vencidas com saldo", "A autorização passou do fim e ainda tem produto sem usar. Caso de renovar, não de carregar saldo."] };
+function dialogoKpi(filtro) {
+  var hoje = hojeISO(); var t = KPI_TITULOS[filtro] || ["Marcas", ""];
+  var sits = S.d.marcas.map(situacaoMarca).filter(function (x) { return filtro === "vigentes" ? x.vigentes.length : x.id === filtro; }).sort(function (a, b) { return porNome(a.marca, b.marca); });
+  var linhas = sits.map(function (x) {
+    var a = x.alvo; var resumo = "";
+    if (a && temCotas(a)) { var c = consumo(a); resumo = ORDEM_PRODUTOS.filter(function (p) { return c[p].contratado; }).map(function (p) { return PRODUTOS[p].curto + " " + fmtNum(c[p].entregue) + "/" + fmtNum(c[p].contratado) + (c[p].saldo ? "" : " ✓"); }).join(" · "); }
+    else resumo = a ? "Sem cotas cadastradas" : "Sem autorização";
+    var extra = []; if (x.producao.length) extra.push(x.producao.length + " brand em produção"); extra.push(x.ultimaCobranca ? "cobrada há " + diasEntre(x.ultimaCobranca, hoje) + " dias" : "sem cobrança registrada");
+    return '<tr><td><strong>' + esc(x.marca.nome) + '</strong><div class="small muted">' + (a ? esc(rotuloAut(a)) + " · " + esc(situacaoAut(a).nome) : "") + "</div></td><td><div class=\"small\">" + esc(resumo) + '</div><div class="small muted">' + esc(extra.join(" · ")) + "</div></td><td class=\"right\">" + botao("Abrir marca", "p", 'data-acao="ir-marca" data-id="' + attr(x.marca.id) + '"', "arrow-right") + "</td></tr>";
+  }).join("");
+  return '<div class="dialogo largo">' + cabDialogo(t[0] + " (" + sits.length + ")", t[1]) + '<div class="corpo sem tabela-wrap" style="padding:0">' + (sits.length ? '<table class="tabela">' + linhas + "</table>" : '<div class="vazio" style="margin:16px">Nenhuma marca neste grupo.</div>') + '</div><div class="pe">' + botao("Fechar", "", 'data-acao="fechar"') + "</div></div>";
+}
 function formMarca(d) {
   var m = d.item || { nome: "", contato: "", obs: "", ativa: true };
   return '<form class="dialogo" data-form="marca">' + cabDialogo(m.id ? "Editar marca" : "Nova marca") + '<div class="corpo">' +
@@ -987,7 +999,8 @@ function aoClicar(ev) {
     case "editar-edicao": S.dialogo = { tipo: "edicao", item: clone(byId(S.d.edicao, id)) }; return render();
     case "apagar-edicao": return confirmar("Excluir material", "Excluir este material da fila de edição?", "Excluir", function () { apagar("edicao", id, "Excluído."); });
     case "abrir-evento": { var tipo = el.getAttribute("data-tipo"); if (tipo === "brand") return abrirBrand(byId(S.d.brands, id)); if (tipo === "fila") { S.dialogo = { tipo: "fila", item: clone(byId(S.d.fila, id)) }; return render(); } return abrirEntrega(byId(S.d.entregas, id)); }
-    case "ir-marca": return irPara("#/marcas/" + id);
+    case "ir-marca": S.dialogo = null; return irPara("#/marcas/" + id);
+    case "kpi": S.dialogo = { tipo: "kpi", filtro: v }; return render();
     case "ir-relatorio": S.relMarca = el.getAttribute("data-marca"); S.relAut = ""; return irPara("#/relatorios");
     case "gerar-relatorio": { var mm = marca(S.relMarca), aa = aut(S.relAut); if (!mm || !aa) return; return window.Relatorio.abrir(coletorRelatorio(mm, aa)); }
     case "exportar": { var blob = new Blob([JSON.stringify(API.exportar(), null, 1)], { type: "application/json" }); var u = URL.createObjectURL(blob); var at = document.createElement("a"); at.href = u; at.download = "comercial-duas-rodas-" + hojeISO() + ".json"; at.click(); setTimeout(function () { URL.revokeObjectURL(u); }, 2000); return toast("Arquivo exportado."); }

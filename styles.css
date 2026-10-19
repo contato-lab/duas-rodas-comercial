@@ -298,3 +298,8 @@ body.tour-ativo{overflow:hidden}
 .sdia.sem{background:var(--muted-bg);border-style:dashed}
 .sdia .evento{white-space:normal;line-height:1.3}
 .evento.gravacao{border-left-color:var(--borda-forte);border-left-style:dotted}
+
+.indicador.clicavel{cursor:pointer;text-align:left;font:inherit;color:inherit;position:relative;transition:transform .12s,box-shadow .12s;width:100%}
+.indicador.clicavel:hover{box-shadow:var(--sombra-flutua);transform:translateY(-1px)}
+.indicador .ver{position:absolute;right:12px;bottom:12px;font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:2px;opacity:0;transition:opacity .12s}
+.indicador.clicavel:hover .ver{opacity:1}
