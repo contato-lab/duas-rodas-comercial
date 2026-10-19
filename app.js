@@ -680,27 +680,49 @@ function telaCalendario() {
 }
 
 /* ============================================================ tela: relatórios */
+function contagemRelatorio(m, a, de, ate) {
+  var ents = S.d.entregas.filter(function (e) { return e.marcaId === m.id && (a === "todas" || e.autorizacaoId === a.id) && e.status !== "agendado" && e.data >= de && e.data <= ate; });
+  var brands = S.d.brands.filter(function (b) { return b.marcaId === m.id && (a === "todas" || b.autorizacaoId === a.id) && b.etapa === "veiculado" && (!b.dataVeiculacao || (b.dataVeiculacao >= de && b.dataVeiculacao <= ate)); });
+  return { entregas: ents, brands: brands };
+}
+function periodoRelatorio(a) { return { de: S.relDe ? S.relDe + "-01" : (a && a !== "todas" && a.inicio ? a.inicio : "0000-00-00"), ate: S.relAte ? S.relAte + "-31" : (a && a !== "todas" && a.fim ? a.fim : "9999-99-99") }; }
 function telaRelatorios() {
   var m = S.relMarca ? marca(S.relMarca) : null; var auts = m ? autsDaMarca(m.id) : [];
-  if (m && (!S.relAut || !byId(auts, S.relAut))) { var v = auts.filter(function (a) { var s = situacaoAut(a).id; return s === "vigente" || s === "vencendo"; }); S.relAut = (v[0] || auts[0] || {}).id || ""; }
-  var a = aut(S.relAut);
+  if (m && S.relAut !== "todas" && (!S.relAut || !byId(auts, S.relAut))) { var sit = situacaoMarca(m); S.relAut = (sit.alvo || auts[0] || {}).id || "todas"; }
+  var a = S.relAut === "todas" ? "todas" : aut(S.relAut);
   var previa = "";
   if (m && a) {
-    var dados = window.Relatorio ? window.Relatorio.montarDados(coletorRelatorio(m, a)) : null;
-    previa = '<div class="card"><div class="cab"><h2>O que vai no relatório</h2>' + selo(dados.slides.length + " telas") + '</div><div class="corpo"><ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.9">' + dados.slides.map(function (s) { return "<li>" + esc(s.descricao) + "</li>"; }).join("") + "</ol>" +
-      '<div class="alerta-box info mt3">' + icone("info") + '<span class="t">O relatório abre em uma aba nova, em formato 16:9 igual ao do Canva. Para salvar em PDF: Arquivo, Imprimir, destino "Salvar como PDF", papel paisagem, sem margens. Prints de post entram pelos campos de imagem de cada entrega.</span></div></div></div>';
+    var per = periodoRelatorio(a); var cont = contagemRelatorio(m, a, per.de, per.ate);
+    var dados = window.Relatorio ? window.Relatorio.montarDados(coletorRelatorio(m, a)) : { slides: [] };
+    var aviso = "";
+    if (!cont.entregas.length && !cont.brands.length) {
+      var outras = auts.filter(function (x) { return a === "todas" || x.id !== a.id; }).map(function (x) { var c2 = contagemRelatorio(m, x, "0000-00-00", "9999-99-99"); return { a: x, n: c2.entregas.length + c2.brands.length }; }).filter(function (x) { return x.n; });
+      aviso = '<div class="alerta-box">' + icone("triangle-alert") + '<span class="t">Nenhuma entrega publicada nem vídeo veiculado ' + (a === "todas" ? "nesta marca" : "nesta autorização") + (S.relDe || S.relAte ? " dentro do período escolhido" : "") + ". O relatório sairia só com capa e agradecimento." + (outras.length ? " As entregas da " + esc(m.nome) + " estão em: " + outras.map(function (x) { return '<button type="button" class="chip" data-acao="rel-aut" data-id="' + attr(x.a.id) + '">' + esc(rotuloAut(x.a)) + " · " + x.n + " item" + (x.n > 1 ? "s" : "") + "</button>"; }).join(" ") : " Registre as entregas na ficha da marca (caixa do produto, botão Registrar) e os vídeos em Brand.") + "</span></div>";
+    }
+    var semCotas = a !== "todas" && !temCotas(a) ? '<div class="alerta-box info">' + icone("info") + '<span class="t">Esta autorização não tem cotas cadastradas, então a tela "Materiais acordados" não entra. Cadastre as cotas em Autorizações para o relatório mostrar contratado e entregue lado a lado.</span></div>' : "";
+    previa = aviso + semCotas + '<div class="card"><div class="cab"><h2>O que vai no relatório</h2><span class="row">' + selo(cont.entregas.length + " entrega" + (cont.entregas.length === 1 ? "" : "s")) + selo(cont.brands.length + " brand") + selo(dados.slides.length + " telas") + '</span></div><div class="corpo"><ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.9">' + dados.slides.map(function (sl) { return "<li>" + esc(sl.descricao) + "</li>"; }).join("") + "</ol>" +
+      '<div class="alerta-box info mt3">' + icone("info") + '<span class="t">O relatório abre em uma aba nova, em formato 16:9 igual ao do Canva. Para salvar em PDF: Arquivo, Imprimir, destino "Salvar como PDF", papel paisagem, sem margens. Prints de post entram pelo campo de imagem de cada entrega; vídeos de brand usam a thumb do YouTube.</span></div></div></div>';
   }
+  var opcAut = m ? opcoesAuts(m.id).concat([["todas", "Toda a marca (todas as autorizações)"]]) : [];
   return '<div class="card"><div class="corpo"><div class="grid g3">' +
     campo("Marca", select("relMarca", opcoesMarcas("Escolha a marca"), S.relMarca, 'data-filtro="relMarca"')) +
-    campo("Autorização", m ? select("relAut", opcoesAuts(m.id), S.relAut, 'data-filtro="relAut"') : '<input class="input" disabled placeholder="Escolha a marca primeiro">') +
+    campo("Autorização", m ? select("relAut", opcAut, S.relAut, 'data-filtro="relAut"') : '<input class="input" disabled placeholder="Escolha a marca primeiro">', m && a && a !== "todas" ? "Sugerida: a que tem cotas e entregas" : "") +
     campo("Período (opcional)", '<div class="row" style="flex-wrap:nowrap">' + input("relDe", S.relDe, "month", 'data-filtro="relDe"') + '<span class="muted">a</span>' + input("relAte", S.relAte, "month", 'data-filtro="relAte"') + "</div>", "Vazio = toda a vigência da autorização") +
-    '</div><div class="row mt4">' + botao("Gerar relatório", "prim", 'data-acao="gerar-relatorio"' + (m && a ? "" : " disabled"), "printer") + "</div></div></div>" + previa;
+    '</div><div class="row mt4">' + botao("Gerar relatório", "prim", 'data-acao="gerar-relatorio"' + (m && a ? "" : " disabled"), "printer") + (S.relDe || S.relAte ? botao("Limpar período", "fantasma", 'data-acao="rel-limpar-periodo"') : "") + "</div></div></div>" + previa;
 }
 function coletorRelatorio(m, a) {
-  var de = S.relDe ? S.relDe + "-01" : (a.inicio || "0000-00-00"), ate = S.relAte ? S.relAte + "-31" : (a.fim || "9999-99-99");
-  var entregas = S.d.entregas.filter(function (e) { return e.marcaId === m.id && e.autorizacaoId === a.id && e.status !== "agendado" && e.data >= de && e.data <= ate; }).sort(function (x, y) { return x.data.localeCompare(y.data); });
-  var brands = S.d.brands.filter(function (b) { return b.marcaId === m.id && b.autorizacaoId === a.id && b.etapa === "veiculado" && (!b.dataVeiculacao || (b.dataVeiculacao >= de && b.dataVeiculacao <= ate)); });
-  return { marca: m, autorizacao: a, consumo: consumo(a), entregas: entregas, brands: brands, periodo: { de: de, ate: ate }, dataEmissao: hojeISO() };
+  var per = periodoRelatorio(a); var cont = contagemRelatorio(m, a, per.de, per.ate);
+  cont.entregas.sort(function (x, y) { return x.data.localeCompare(y.data); });
+  var autRef = a === "todas" ? (situacaoMarca(m).alvo || { id: "todas", rotulo: "Todas as autorizações", cotas: {} }) : a;
+  var cons = a === "todas" ? consumoMarca(m) : consumo(a);
+  return { marca: m, autorizacao: a === "todas" ? { id: "todas", rotulo: "Todas as autorizações", cotas: autRef.cotas || {}, inicio: null, fim: null } : a, consumo: cons, entregas: cont.entregas, brands: cont.brands, periodo: per, dataEmissao: hojeISO() };
+}
+/* soma das cotas e do consumo de todas as autorizações da marca (para o relatório "toda a marca") */
+function consumoMarca(m) {
+  var total = {}; ORDEM_PRODUTOS.forEach(function (p) { total[p] = { contratado: 0, entregue: 0, programado: 0, andamento: 0, saldo: 0, pct: 0 }; });
+  autsDaMarca(m.id).forEach(function (a) { var c = consumo(a); ORDEM_PRODUTOS.forEach(function (p) { ["contratado", "entregue", "programado", "andamento"].forEach(function (k) { total[p][k] += c[p][k]; }); }); });
+  ORDEM_PRODUTOS.forEach(function (p) { var x = total[p]; x.saldo = Math.max(0, x.contratado - x.entregue); x.pct = x.contratado ? Math.min(100, Math.round(x.entregue / x.contratado * 100)) : 0; });
+  return total;
 }
 
 /* ============================================================ tela: ajustes */
@@ -1087,8 +1109,10 @@ function aoClicar(ev) {
     case "abrir-evento": { var tipo = el.getAttribute("data-tipo"); if (tipo === "brand") return abrirBrand(byId(S.d.brands, id)); if (tipo === "fila") { S.dialogo = { tipo: "fila", item: clone(byId(S.d.fila, id)) }; return render(); } return abrirEntrega(byId(S.d.entregas, id)); }
     case "ir-marca": S.dialogo = null; return irPara("#/marcas/" + id);
     case "kpi": S.dialogo = { tipo: "kpi", filtro: v }; return render();
-    case "ir-relatorio": S.relMarca = el.getAttribute("data-marca"); S.relAut = ""; return irPara("#/relatorios");
-    case "gerar-relatorio": { var mm = marca(S.relMarca), aa = aut(S.relAut); if (!mm || !aa) return; return window.Relatorio.abrir(coletorRelatorio(mm, aa)); }
+    case "ir-relatorio": S.relMarca = el.getAttribute("data-marca"); S.relAut = S.fichaAut && aut(S.fichaAut) && aut(S.fichaAut).marcaId === S.relMarca ? S.fichaAut : ""; S.relDe = ""; S.relAte = ""; return irPara("#/relatorios");
+    case "rel-aut": S.relAut = id; return render();
+    case "rel-limpar-periodo": S.relDe = ""; S.relAte = ""; return render();
+    case "gerar-relatorio": { var mm = marca(S.relMarca), aa = S.relAut === "todas" ? "todas" : aut(S.relAut); if (!mm || !aa) return; return window.Relatorio.abrir(coletorRelatorio(mm, aa)); }
     case "exportar": { var blob = new Blob([JSON.stringify(API.exportar(), null, 1)], { type: "application/json" }); var u = URL.createObjectURL(blob); var at = document.createElement("a"); at.href = u; at.download = "comercial-duas-rodas-" + hojeISO() + ".json"; at.click(); setTimeout(function () { URL.revokeObjectURL(u); }, 2000); return toast("Arquivo exportado."); }
     case "recarregar-seed": return confirmar("Recarregar dados das planilhas", "Isso apaga tudo que foi editado nesta plataforma e volta aos dados importados das planilhas. Exporte antes se quiser guardar.", "Recarregar", function () { API.substituirTudo(dadosIniciais()).then(function (d) { S.d = d; toast("Dados das planilhas recarregados."); S.dialogo = null; render(); }); });
     case "exemplos-carregar": return carregarExemplos();

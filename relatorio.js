@@ -37,14 +37,15 @@ function slideAcordados(d) {
   var c = d.consumo, linhas = [];
   ["post", "brand", "revista", "email", "banner"].forEach(function (p) { if (c[p] && c[p].contratado) linhas.push([p === "banner" ? fmtNum(c[p].contratado) : p02(c[p].contratado), PRODUTOS[p].toUpperCase()]); });
   if (!linhas.length) return null;
-  return { descricao: "Materiais acordados (cotas da autorização " + (d.autorizacao.rotulo || "") + ")", html: slideLista(d, "MATERIAIS", "ACORDADOS", linhas) };
+  return { descricao: "Materiais acordados (" + (d.autorizacao.id === "todas" ? "soma das cotas de todas as autorizações" : "cotas da autorização " + (d.autorizacao.rotulo || "")) + ")", html: slideLista(d, "MATERIAIS", "ACORDADOS", linhas) };
 }
 function slideEntregues(d) {
   var c = d.consumo, linhas = [];
   var porProduto = {}; d.entregas.forEach(function (e) { porProduto[e.produto] = (porProduto[e.produto] || 0) + (e.produto === "banner" ? (+(e.metricas && e.metricas.impressoes) || 0) : (e.produto === "revista" ? (+e.quantidade || 1) : 1)); });
   porProduto.brand = d.brands.length;
   ["post", "brand", "revista", "email", "banner"].forEach(function (p) { var n = porProduto[p] || 0; if (n || (c[p] && c[p].contratado)) linhas.push([p === "banner" ? fmtNum(n) : p02(n), PRODUTOS[p].toUpperCase()]); });
-  return { descricao: "Materiais entregues no período", html: slideLista(d, "MATERIAIS", "ENTREGUES", linhas) };
+  if (!linhas.length) linhas.push(["", "NENHUM MATERIAL NO PERÍODO"]);
+  return { descricao: "Materiais entregues no período" + (d.entregas.length || d.brands.length ? "" : " (nenhum)"), html: slideLista(d, "MATERIAIS", "ENTREGUES", linhas) };
 }
 function caixaMetrica(titulo, linhas) { return '<div class="metrica"><span class="rotulo">' + esc(titulo) + "</span><div>" + linhas.map(function (l) { return "<span>" + esc(l) + "</span>"; }).join("") + "</div></div>"; }
 function slidePost(d, e) {
