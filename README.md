@@ -17,21 +17,15 @@ Sem build e sem servidor: é HTML, CSS e JavaScript puros. Publica direto no Git
 
 ## Publicar
 
-1. Criar o repositório `contato-lab/duas-rodas-comercial` no GitHub (público).
-2. Subir todos os arquivos desta pasta pela opção "Add file > Upload files".
-3. Em Settings > Pages, escolher a branch `main` e a pasta raiz.
-4. O endereço fica `https://contato-lab.github.io/duas-rodas-comercial/`.
+Publicado em 19/10/2026 no repositório `contato-lab/duas-rodas-comercial` (GitHub Pages, branch `main`, pasta raiz). Endereço: https://contato-lab.github.io/duas-rodas-comercial/
 
 Para atualizar: subir o arquivo alterado de novo pelo upload, que substitui o antigo. Trocar o `?v=1` dos arquivos no `index.html` quando mudar CSS ou JS, para o navegador não usar a versão guardada.
 
 ## Dados compartilhados (Firebase)
 
-Hoje cada pessoa tem a própria cópia no navegador. Para o time inteiro ver a mesma coisa:
+Feito em 19/10/2026. Projeto `comercial-duas-rodas` na conta Agência UnderClick (mesma dos projetos do festival), Firestore em `southamerica-east1`, login anônimo ligado, domínio `contato-lab.github.io` autorizado. A configuração está em `firebase-config.js`. Na primeira abertura com o Firestore vazio, a plataforma carregou sozinha os dados das planilhas.
 
-1. No console do Firebase, criar o projeto `comercial-duas-rodas` na mesma conta de faturamento dos outros projetos.
-2. Ativar o Firestore (região `southamerica-east1`) e, em Authentication, o método "Anônimo".
-3. Colar a configuração web em `firebase-config.js` e publicar.
-4. Regras do Firestore para esta etapa (sem login, só quem abre a página escreve):
+Regras publicadas (o botão Publicar do console não aparecia, então foram publicadas pelo Cloud Shell com `firebase deploy --only firestore:rules`):
 
 ```
 rules_version = '2';
@@ -45,7 +39,7 @@ service cloud.firestore {
 }
 ```
 
-5. Abrir a plataforma, ir em Ajustes e usar "Importar dados" com o JSON exportado do navegador que tem os dados certos.
+Para mudar as regras de novo: abrir https://shell.cloud.google.com com a conta, pasta `~/dr`, editar `firestore.rules` e rodar o mesmo comando.
 
 ## Próximas etapas combinadas
 
