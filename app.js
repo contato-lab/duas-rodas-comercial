@@ -685,7 +685,7 @@ function contagemRelatorio(m, a, de, ate) {
   var brands = S.d.brands.filter(function (b) { return b.marcaId === m.id && (a === "todas" || b.autorizacaoId === a.id) && b.etapa === "veiculado" && (!b.dataVeiculacao || (b.dataVeiculacao >= de && b.dataVeiculacao <= ate)); });
   return { entregas: ents, brands: brands };
 }
-function periodoRelatorio(a) { return { de: S.relDe ? S.relDe + "-01" : (a && a !== "todas" && a.inicio ? a.inicio : "0000-00-00"), ate: S.relAte ? S.relAte + "-31" : (a && a !== "todas" && a.fim ? a.fim : "9999-99-99") }; }
+function periodoRelatorio(a) { return { de: S.relDe ? S.relDe + "-01" : "0000-00-00", ate: S.relAte ? S.relAte + "-31" : "9999-99-99" }; }
 function telaRelatorios() {
   var m = S.relMarca ? marca(S.relMarca) : null; var auts = m ? autsDaMarca(m.id) : [];
   if (m && S.relAut !== "todas" && (!S.relAut || !byId(auts, S.relAut))) { var sit = situacaoMarca(m); S.relAut = (sit.alvo || auts[0] || {}).id || "todas"; }
@@ -707,7 +707,7 @@ function telaRelatorios() {
   return '<div class="card"><div class="corpo"><div class="grid g3">' +
     campo("Marca", select("relMarca", opcoesMarcas("Escolha a marca"), S.relMarca, 'data-filtro="relMarca"')) +
     campo("Autorização", m ? select("relAut", opcAut, S.relAut, 'data-filtro="relAut"') : '<input class="input" disabled placeholder="Escolha a marca primeiro">', m && a && a !== "todas" ? "Sugerida: a que tem cotas e entregas" : "") +
-    campo("Período (opcional)", '<div class="row" style="flex-wrap:nowrap">' + input("relDe", S.relDe, "month", 'data-filtro="relDe"') + '<span class="muted">a</span>' + input("relAte", S.relAte, "month", 'data-filtro="relAte"') + "</div>", "Vazio = toda a vigência da autorização") +
+    campo("Período (opcional)", '<div class="row" style="flex-wrap:nowrap">' + input("relDe", S.relDe, "month", 'data-filtro="relDe"') + '<span class="muted">a</span>' + input("relAte", S.relAte, "month", 'data-filtro="relAte"') + "</div>", "Em branco = tudo que está lançado na autorização") +
     '</div><div class="row mt4">' + botao("Gerar relatório", "prim", 'data-acao="gerar-relatorio"' + (m && a ? "" : " disabled"), "printer") + (S.relDe || S.relAte ? botao("Limpar período", "fantasma", 'data-acao="rel-limpar-periodo"') : "") + "</div></div></div>" + previa;
 }
 function coletorRelatorio(m, a) {
