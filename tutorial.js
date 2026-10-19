@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 var CHAVE = "drc-tutorial-visto";
-var VERSAO_TUTORIAL = 2;
+var VERSAO_TUTORIAL = 3;
 
 /* ============================================================ passos do passeio
    rota: para onde ir antes de mostrar o passo. alvo: lista de seletores; usa o primeiro que existir e estiver visível.
@@ -21,14 +21,14 @@ var PASSOS = [
     texto: "De segunda a domingo, tudo que sai em cada dia, de todas as marcas. A última coluna é o que está na fila sem data: clique no item para dar a data na hora. Vermelho ao lado do item é material parado há 5 dias ou mais." },
   { rota: "#/inicio", alvo: [".grid.g2 .card"], titulo: "Radar de renovação",
     texto: "Contratos que vencem nos próximos 60 dias e o saldo que ainda têm. É o aviso para o Marconi começar a renovar sem deixar o cliente carregar saldo vencido. Ao lado, os vídeos de brand parados com o cliente há 14 dias ou mais." },
-  { rota: "#/marcas", alvo: [".chips"], titulo: "Marcas: filtros",
-    texto: "Por padrão aparecem só as marcas com contrato vigente ou vídeo em produção. Os outros filtros mostram todas, só as com alerta, ou as que ainda estão sem cotas cadastradas." },
-  { rota: "#/marcas", alvo: [".lista-marcas .marca-card"], titulo: "O card de cada marca",
-    texto: "A barrinha de cada produto mostra quanto já foi entregue do que foi contratado. O risquinho preto é o tempo do contrato que já passou. Barrinha laranja é produto atrasado. Clique no card para abrir a ficha completa." },
-  { rota: "#/marcas/__MARCA__", alvo: [".ficha-cab + .row", ".card .row.mt4"], titulo: "Ficha da marca: as autorizações",
-    texto: "Cada chip é uma autorização (contrato) da marca, com a situação: vigente, vencendo, vencida. Uma marca pode ter várias ao mesmo tempo, por exemplo o contrato de 2025 com saldo e o de 2026 já renovado. Clique no chip para ver só aquela autorização." },
-  { rota: "#/marcas/__MARCA__", alvo: [".cota", ".ficha-grade .card"], titulo: "Consumo do pacote",
-    texto: "Aqui estão as cotas daquela autorização: contratado, entregue, programado e o que falta. Ao lado ficam as abas de Entregas, Brand e Cobranças. O botão Nova entrega registra um post, e-mail, página ou banner que saiu." },
+  { rota: "#/marcas", alvo: [".md-lista"], titulo: "Marcas: a lista",
+    texto: "Todas as marcas numa coluna, com a bolinha de situação (verde em dia, laranja atrasada, vermelha vencida com saldo, tracejada sem cotas) e o produto mais crítico. Busca e filtros em cima. Clique numa marca e a ficha abre ao lado, sem trocar de tela." },
+  { rota: "#/marcas/__MARCA__", alvo: [".ficha-topo"], titulo: "Ficha da marca",
+    texto: "Nome, situação, contato na marca e os botões: Editar, Copiar resumo pro cliente (gera o texto pronto com contratado, entregue e saldo), Nova entrega e Relatório. Embaixo, os chips são as autorizações: uma marca pode ter o contrato de 2025 com saldo e o de 2026 renovado ao mesmo tempo." },
+  { rota: "#/marcas/__MARCA__", alvo: [".prod-caixas"], titulo: "Uma caixa por produto",
+    texto: "Posts, Brand, E-mail, Revista e Banner, cada um com entregue de contratado e o que falta. Clique na caixa para ver só aquele produto: a barrinha, o ritmo necessário para fechar no prazo e a lista de entregas com os números." },
+  { rota: "#/marcas/__MARCA__", alvo: [".ficha-abas"], titulo: "Linha do ano, Cobranças e Contrato",
+    texto: "Linha do ano mostra mês a mês o que saiu de cada produto e os meses vazios, que é a visão de defesa. Cobranças guarda cada vez que a revista cobrou a marca, com data. Contrato traz os dados da autorização." },
   { rota: "#/autorizacoes", alvo: ['[data-acao="nova-aut"]'], titulo: "Cadastrar uma autorização",
     texto: "Quando o Marconi fechar um contrato novo, clique aqui. Dá para subir o PDF da autorização: se o PDF tiver texto, a plataforma lê Gecom, vigência, valor e cotas sozinha. Se for escaneado, preencha à mão olhando o documento. Sem as cotas, a barrinha da marca não funciona." },
   { rota: "#/fila", alvo: ['[data-acao="novo-fila"]'], titulo: "Fila de materiais",
@@ -60,8 +60,8 @@ var GUIA = [
     "As cotas são o coração da plataforma: posts, brands, disparos de e-mail, páginas de revista e impressões de banner. Sem elas a barrinha não funciona.",
     "Salve. A autorização aparece como chip na ficha da marca." ] },
   { titulo: "Registrar uma entrega (post, e-mail, página, banner)", passos: [
-    "Abra a ficha da marca e escolha o chip da autorização certa.",
-    "Clique em Nova entrega.",
+    "Abra a ficha da marca (Marcas, clique no nome) e escolha o chip da autorização certa.",
+    "Clique na caixa do produto (Posts, E-mail, Revista ou Banner) e depois em Registrar.",
     "Escolha o produto, a data e escreva o título. Cole o link do post e, se já tiver, os números (visualizações, alcance, curtidas).",
     "Se quiser que o print apareça no relatório, suba a imagem em Print para o relatório.",
     "Situação Publicado conta na cota. Situação Programado só aparece no calendário, sem contar.",
@@ -89,6 +89,11 @@ var GUIA = [
     "Confira a lista do que vai entrar e clique em Gerar relatório. Ele abre em uma aba nova.",
     "Para salvar em PDF: Imprimir, destino Salvar como PDF, papel paisagem, sem margens.",
     "Os prints dos posts vêm das entregas. Sem print, a tela mostra o espaço reservado." ] },
+  { titulo: "Cobrar o cliente e ter a prova", passos: [
+    "Na ficha da marca, clique na caixa do produto e depois em Registrar cobrança. Ou use a aba Cobranças.",
+    "Escreva para quem, por qual canal e o que foi pedido. A data fica gravada.",
+    "Para vídeos de brand, a cobrança fica na ficha do vídeo (menu Brand) e aparece também na aba Cobranças da marca.",
+    "Na hora de responder o cliente, use Copiar resumo pro cliente no topo da ficha: sai um texto com contratado, entregue, saldo e a última cobrança, pronto para colar no e-mail ou no WhatsApp." ] },
   { titulo: "Entender os alertas", passos: [
     "Pacote atrasado: o produto está 25 pontos ou mais abaixo do tempo do contrato já passado. Exemplo: 60% do prazo passou e só 20% dos posts saíram.",
     "Vencida com saldo: a autorização passou do fim e ainda tem produto sem usar. É o caso de cobrar renovação, não de carregar o saldo para o ano seguinte.",

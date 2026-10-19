@@ -184,7 +184,7 @@ var S = {
   dialogo: null, gavetaAberta: false,
   busca: "", filtroMarcas: "ativas", filtroBrandMarca: "", filtroBrandAut: "", filtroEdicaoTipo: "", filtroEdicaoStatus: "", filtroFila: "aguardando",
   calMes: hojeISO().slice(0, 7), relMarca: "", relAut: "", relDe: "", relAte: "",
-  fichaAba: "cotas", fichaAut: ""
+  fichaAba: "post", fichaAut: ""
 };
 function marca(id) { return byId(S.d.marcas, id); }
 function nomeMarca(id) { var m = marca(id); return m ? m.nome : "(sem marca)"; }
@@ -263,8 +263,7 @@ function render() {
   switch (r.caminho) {
     case "/inicio": titulo = "Visão geral"; sub = fmtDataExtensa(hojeISO()); conteudo = telaInicio(); acao = '<span class="acoes-rapidas">' + botao("Entrou material", "", 'data-acao="novo-fila"', "plus") + botao("Registrar entrega", "", 'data-acao="nova-entrega"', "plus") + botao("Novo brand", "", 'data-acao="novo-brand"', "plus") + "</span>"; break;
     case "/marcas":
-      if (r.id) { var m = marca(r.id); titulo = m ? m.nome : "Marca"; sub = m ? "Autorizações, cotas e entregas" : ""; conteudo = m ? telaMarca(m) : '<div class="vazio">Marca não encontrada.</div>'; acao = m ? botao("Nova entrega", "prim", 'data-acao="nova-entrega" data-marca="' + attr(m.id) + '" data-aut="' + attr(S.fichaAut || "") + '"', "plus") : ""; }
-      else { titulo = "Marcas"; sub = S.d.marcas.length + " marcas cadastradas"; conteudo = telaMarcas(); acao = botao("Nova marca", "prim", 'data-acao="nova-marca"', "plus"); }
+      titulo = "Marcas"; sub = S.d.marcas.length + " marcas cadastradas · clique numa marca para abrir a ficha ao lado"; conteudo = telaMarcas(r.id && marca(r.id) ? r.id : ""); acao = botao("Nova marca", "prim", 'data-acao="nova-marca"', "plus");
       break;
     case "/autorizacoes": titulo = "Autorizações"; sub = "Contratos fechados pelo comercial e suas cotas"; conteudo = telaAutorizacoes(); acao = botao("Nova autorização", "prim", 'data-acao="nova-aut"', "plus"); break;
     case "/fila": titulo = "Fila de materiais"; sub = "O que o atendimento recebeu e ainda não tem data"; conteudo = telaFila(); acao = botao("Entrou material", "prim", 'data-acao="novo-fila"', "plus"); break;
@@ -342,7 +341,7 @@ function situacaoMarca(m) {
   var alvo = vig.filter(temCotas)[0] || fut.filter(temCotas)[0] || recentes.filter(temCotas)[0] || vig[0] || fut[0] || recentes[0] || null;
   var alertas = []; auts.forEach(function (a) { alertas = alertas.concat(alertasAut(a)); });
   var producao = S.d.brands.filter(function (b) { return b.marcaId === m.id && b.etapa !== "veiculado"; });
-  var ultima = null; S.d.brands.filter(function (b) { return b.marcaId === m.id; }).forEach(function (b) { (b.cobrancas || []).forEach(function (c) { if (!ultima || c.data > ultima) ultima = c.data; }); });
+  var ultima = null; (m.cobrancas || []).forEach(function (c) { if (!ultima || c.data > ultima) ultima = c.data; }); S.d.brands.filter(function (b) { return b.marcaId === m.id; }).forEach(function (b) { (b.cobrancas || []).forEach(function (c) { if (!ultima || c.data > ultima) ultima = c.data; }); });
   var id = "ok", nome = "Em dia";
   if (alertas.some(function (a) { return a.tipo === "erro"; })) { id = "vencida"; nome = "Vencida com saldo"; }
   else if (alertas.length) { id = "atrasada"; nome = "Atrasada"; }
@@ -404,55 +403,134 @@ function telaInicio() {
 function indicador(rot, valor, destaque) { return '<div class="indicador' + (destaque ? " destaque" : "") + '"><span class="valor">' + valor + '</span><span class="rot">' + esc(rot) + "</span></div>"; }
 
 /* ============================================================ tela: marcas */
-function resumoMarca(m) {
-  var auts = autsDaMarca(m.id); var vig = auts.filter(function (a) { var s = situacaoAut(a).id; return s === "vigente" || s === "vencendo" || s === "futura"; });
-  var alvo = vig[0] || auts[0];
-  var al = 0; auts.forEach(function (a) { al += alertasAut(a).length; });
-  return { auts: auts, vigentes: vig, alvo: alvo, alertas: al, brandsAndamento: S.d.brands.filter(function (b) { return b.marcaId === m.id && b.etapa !== "veiculado"; }).length };
+/* ---------- marcas: lista à esquerda, ficha à direita */
+function cotaCritica(x) {
+  // produto com maior distância entre o tempo passado e o entregue, para mostrar na lista
+  var a = x.alvo; if (!a || !temCotas(a)) return null;
+  var c = consumo(a), t = tempoDecorrido(a), pior = null;
+  ORDEM_PRODUTOS.forEach(function (p) { var k = c[p]; if (!k.contratado) return; var gap = (t == null ? 0 : t) - k.pct; if (!pior || gap > pior.gap) pior = { p: p, k: k, gap: gap }; });
+  return pior;
 }
-function telaMarcas() {
+function telaMarcas(idSel) {
   var q = S.busca.toLowerCase();
-  var lista = S.d.marcas.slice().sort(porNome).filter(function (m) { return !q || m.nome.toLowerCase().indexOf(q) >= 0; });
-  var comResumo = lista.map(function (m) { return { m: m, r: resumoMarca(m) }; });
-  if (S.filtroMarcas === "ativas") comResumo = comResumo.filter(function (x) { return x.r.vigentes.length || x.r.brandsAndamento; });
-  if (S.filtroMarcas === "alertas") comResumo = comResumo.filter(function (x) { return x.r.alertas; });
-  if (S.filtroMarcas === "sem") comResumo = comResumo.filter(function (x) { return !x.r.auts.some(temCotas); });
-  return '<div class="filtros"><div class="busca">' + icone("search") + '<input class="input" id="busca-marcas" placeholder="Buscar marca" value="' + attr(S.busca) + '" data-filtro="busca"></div>' +
-    '<div class="chips">' + [["ativas", "Com contrato ou produção"], ["todas", "Todas"], ["alertas", "Com alerta"], ["sem", "Sem cotas cadastradas"]].map(function (o) { return '<button type="button" class="chip' + (S.filtroMarcas === o[0] ? " ativo" : "") + '" data-acao="filtro-marcas" data-v="' + o[0] + '">' + o[1] + "</button>"; }).join("") + "</div></div>" +
-    (comResumo.length ? '<div class="lista-marcas">' + comResumo.map(function (x) { return cardMarca(x.m, x.r); }).join("") + "</div>" : '<div class="vazio">Nenhuma marca nesse filtro.</div>');
+  var sits = S.d.marcas.map(situacaoMarca).filter(function (x) { return !q || x.marca.nome.toLowerCase().indexOf(q) >= 0; });
+  if (S.filtroMarcas === "ativas") sits = sits.filter(function (x) { return x.mostrar; });
+  else if (S.filtroMarcas === "alertas") sits = sits.filter(function (x) { return x.id === "atrasada" || x.id === "vencida"; });
+  else if (S.filtroMarcas === "sem") sits = sits.filter(function (x) { return x.id === "sem_cotas"; });
+  var ordem = { vencida: 0, atrasada: 1, ok: 2, futura: 3, sem_cotas: 4 };
+  sits.sort(function (a, b) { return (ordem[a.id] - ordem[b.id]) || porNome(a.marca, b.marca); });
+  var m = idSel ? marca(idSel) : null;
+  var lista = '<aside class="md-lista' + (m ? " com-ficha" : "") + '"><div class="md-topo"><div class="busca">' + icone("search") + '<input class="input p" id="busca-marcas" placeholder="Buscar marca" value="' + attr(S.busca) + '" data-filtro="busca"></div>' +
+    '<div class="chips">' + [["ativas", "Ativas"], ["alertas", "Com alerta"], ["sem", "Sem cotas"], ["todas", "Todas"]].map(function (o) { return '<button type="button" class="chip' + (S.filtroMarcas === o[0] ? " ativo" : "") + '" data-acao="filtro-marcas" data-v="' + o[0] + '">' + o[1] + "</button>"; }).join("") + "</div></div>" +
+    '<div class="md-itens">' + (sits.length ? sits.map(function (x) {
+      var cc = cotaCritica(x); var sel = m && m.id === x.marca.id;
+      return '<a href="#/marcas/' + x.marca.id + '" class="md-item' + (sel ? " sel" : "") + '"><i class="bola ' + x.id + '"></i><span class="nm">' + esc(x.marca.nome) + '</span><span class="n">' + (cc ? esc(PRODUTOS[cc.p].curto) + " " + fmtNum(cc.k.entregue) + "/" + fmtNum(cc.k.contratado) : (x.alvo ? "sem cotas" : "")) + "</span></a>";
+    }).join("") : '<div class="vazio" style="margin:10px">Nenhuma marca nesse filtro.</div>') + "</div></aside>";
+  var ficha = m ? fichaMarca(m) : '<div class="md-vazio"><div class="vazio">Escolha uma marca na lista para ver a ficha, ou ' + botao("cadastre uma nova", "p", 'data-acao="nova-marca"', "plus") + "</div></div>";
+  return '<div class="md-grade' + (m ? " com-ficha" : "") + '">' + lista + '<section class="md-ficha">' + ficha + "</section></div>";
 }
-function cardMarca(m, r) {
-  var a = r.alvo; var cotas = "";
-  if (a && temCotas(a)) {
-    var c = consumo(a), t = tempoDecorrido(a);
-    cotas = '<div class="mini-cotas">' + ORDEM_PRODUTOS.filter(function (p) { return c[p].contratado; }).map(function (p) { var x = c[p]; return '<div class="mini-cota"><span>' + esc(PRODUTOS[p].curto) + "</span>" + barra(x.pct, classeCota(x, t), t) + '<span class="n">' + fmtNum(x.entregue) + "/" + fmtNum(x.contratado) + "</span></div>"; }).join("") + "</div>";
-  } else cotas = '<div class="small muted">' + (r.auts.length ? "Autorização sem cotas cadastradas" : "Sem autorização cadastrada") + (r.brandsAndamento ? " · " + r.brandsAndamento + " brand em produção" : "") + "</div>";
-  return '<a href="#/marcas/' + m.id + '" class="card marca-card"><div class="row between"><span class="nome">' + esc(m.nome) + "</span>" + (r.alertas ? selo(r.alertas + " alerta" + (r.alertas > 1 ? "s" : ""), "erro") : (a ? selo(situacaoAut(a).nome, situacaoAut(a).cls) : "")) + "</div>" +
-    (a ? '<div class="small muted">' + esc(rotuloAut(a)) + (r.auts.length > 1 ? " · " + r.auts.length + " autorizações" : "") + "</div>" : "") + cotas + "</a>";
+/* meses entre duas datas (ou o ano corrente), no formato AAAA-MM */
+function mesesEntre(ini, fim) {
+  var a = parseISO(ini) || new Date(new Date().getFullYear(), 0, 1), b = parseISO(fim) || new Date(new Date().getFullYear(), 11, 31);
+  var out = []; var d = new Date(a.getFullYear(), a.getMonth(), 1);
+  while (d <= b && out.length < 15) { out.push(d.getFullYear() + "-" + p2(d.getMonth() + 1)); d = new Date(d.getFullYear(), d.getMonth() + 1, 1); }
+  return out;
 }
-function telaMarca(m) {
-  var auts = autsDaMarca(m.id);
-  if (!S.fichaAut || !byId(auts, S.fichaAut)) { var v = auts.filter(function (a) { var s = situacaoAut(a).id; return s === "vigente" || s === "vencendo"; }); S.fichaAut = (v[0] || auts[0] || {}).id || ""; }
-  var a = aut(S.fichaAut);
+function cobrancasDaMarca(m) {
+  var lista = (m.cobrancas || []).map(function (c) { return { data: c.data, texto: c.texto, produto: c.produto || null, ref: "" }; });
+  S.d.brands.filter(function (b) { return b.marcaId === m.id; }).forEach(function (b) { (b.cobrancas || []).forEach(function (c) { lista.push({ data: c.data, texto: c.texto, produto: "brand", ref: b.titulo, brandId: b.id }); }); });
+  return lista.sort(function (x, y) { return String(y.data).localeCompare(String(x.data)); });
+}
+function resumoParaCliente(m, a) {
+  var linhas = [m.nome + (a ? ", autorização " + rotuloAut(a) + (a.inicio ? " (" + fmtData(a.inicio) + " a " + fmtData(a.fim) + ")" : "") : "") + ":"];
+  if (a && temCotas(a)) { var c = consumo(a); ORDEM_PRODUTOS.forEach(function (p) { var k = c[p]; if (!k.contratado) return; linhas.push("• " + PRODUTOS[p].nome + ": " + fmtNum(k.entregue) + " de " + fmtNum(k.contratado) + " " + PRODUTOS[p].unidade + (k.saldo ? ", faltam " + fmtNum(k.saldo) : ", completo") + (k.programado ? " (" + fmtNum(k.programado) + " programado)" : "") + (p === "brand" && k.andamento ? " (" + k.andamento + " em produção)" : "")); }); }
+  else linhas.push("• Sem cotas cadastradas.");
+  var cob = cobrancasDaMarca(m); if (cob.length) linhas.push("Última cobrança em " + fmtData(cob[0].data) + ": " + cob[0].texto);
+  if (a && a.fim) { var dd = diasEntre(hojeISO(), a.fim); linhas.push(dd >= 0 ? "Vigência termina em " + fmtData(a.fim) + " (" + dd + " dias)." : "Vigência terminou em " + fmtData(a.fim) + "; o saldo não passa para o próximo contrato."); }
+  return linhas.join("\n");
+}
+function fichaMarca(m) {
+  var auts = autsDaMarca(m.id); var sit = situacaoMarca(m);
+  if (!S.fichaAut || !byId(auts, S.fichaAut)) S.fichaAut = (sit.alvo || auts[0] || {}).id || "";
+  var a = aut(S.fichaAut); var c = a ? consumo(a) : null; var t = a ? tempoDecorrido(a) : null;
+  var abasExtra = { ano: "Linha do ano", cobrancas: "Cobranças", contrato: "Contrato" };
+  if (!S.fichaAba || (!PRODUTOS[S.fichaAba] && !abasExtra[S.fichaAba])) S.fichaAba = "post";
+  var cab = '<div class="ficha-topo"><div class="row" style="gap:10px"><a href="#/marcas" class="btn icone fantasma so-cel" aria-label="Voltar">' + icone("arrow-left") + '</a><h2 class="display" style="font-size:30px;line-height:1">' + esc(m.nome) + "</h2>" + selo(sit.nome, sit.id === "ok" ? "ok" : sit.id === "atrasada" ? "alerta" : sit.id === "vencida" ? "erro" : "") + (m.ativa === false ? selo("Inativa") : "") + "</div>" +
+    '<div class="small muted">' + (m.contato ? "Contato: " + esc(m.contato) : "Sem contato cadastrado") + (m.obs ? " · " + esc(m.obs) : "") + "</div>" +
+    '<div class="row" style="gap:6px;margin-top:4px">' + botao("Editar marca", "p", 'data-acao="editar-marca" data-id="' + attr(m.id) + '"', "pencil") + botao("Copiar resumo pro cliente", "p", 'data-acao="copiar-resumo" data-id="' + attr(m.id) + '"', "link") + botao("Nova entrega", "p", 'data-acao="nova-entrega" data-marca="' + attr(m.id) + '" data-aut="' + attr(a ? a.id : "") + '" data-produto="' + attr(PRODUTOS[S.fichaAba] ? S.fichaAba : "post") + '"', "plus") + botao("Relatório", "p preto", 'data-acao="ir-relatorio" data-marca="' + attr(m.id) + '"', "printer") + "</div>" +
+    '<div class="row" style="gap:6px;margin-top:6px"><span class="small muted">Autorização:</span>' + auts.map(function (x) { var sx = situacaoAut(x); return '<button type="button" class="chip' + (a && a.id === x.id ? " ativo" : "") + '" data-acao="ficha-aut" data-id="' + attr(x.id) + '">' + esc(rotuloAut(x)) + ' <span class="muted">· ' + esc(sx.nome) + "</span></button>"; }).join("") + botao("Nova", "p fantasma", 'data-acao="nova-aut" data-marca="' + attr(m.id) + '"', "plus") + "</div></div>";
+  // caixas por produto
+  var caixas = '<div class="prod-caixas">' + ORDEM_PRODUTOS.map(function (p) {
+    var k = c ? c[p] : null; var contratado = k && k.contratado; var linha, cls = "";
+    if (!contratado) linha = '<span class="muted">não contratado</span>';
+    else if (k.saldo === 0) { linha = "pacote completo"; cls = "ok"; }
+    else { var atras = t != null && t - k.pct >= 25; linha = "faltam " + fmtNum(k.saldo) + (atras ? " · atrasado" : ""); cls = atras ? "alerta" : ""; if (p === "brand" && k.andamento) linha += " · " + k.andamento + " em produção"; if (k.programado) linha += " · " + fmtNum(k.programado) + " programado"; }
+    return '<button type="button" class="prod-caixa ' + p + (S.fichaAba === p ? " ativa" : "") + '" data-acao="ficha-aba" data-v="' + p + '"><span class="rot">' + esc(PRODUTOS[p].curto) + '</span><span class="num">' + (contratado ? fmtNum(k.entregue) + "<small>/" + fmtNum(k.contratado) + "</small>" : (k && k.entregue ? fmtNum(k.entregue) : "—")) + '</span><span class="lin ' + cls + '">' + linha + "</span></button>";
+  }).join("") + "</div>";
+  var abas = '<div class="abas ficha-abas">' + Object.keys(abasExtra).map(function (k) { return '<button type="button" class="aba' + (S.fichaAba === k ? " ativa" : "") + '" data-acao="ficha-aba" data-v="' + k + '">' + abasExtra[k] + (k === "cobrancas" ? " (" + cobrancasDaMarca(m).length + ")" : "") + "</button>"; }).join("") + "</div>";
+  var painel;
+  if (PRODUTOS[S.fichaAba]) painel = painelProduto(m, a, S.fichaAba);
+  else if (S.fichaAba === "ano") painel = painelLinhaDoAno(m, a);
+  else if (S.fichaAba === "cobrancas") painel = painelCobrancas(m);
+  else painel = painelContrato(m, a);
+  return cab + caixas + abas + '<div class="card painel"><div class="corpo">' + painel + "</div></div>";
+}
+function painelProduto(m, a, p) {
+  var hoje = hojeISO(); var k = a ? consumo(a)[p] : null; var t = a ? tempoDecorrido(a) : null;
+  var cab = '<div class="row between"><h3>' + esc(PRODUTOS[p].nome) + (k && k.contratado ? ' <span class="muted" style="font-weight:400">· ' + fmtNum(k.entregue) + " de " + fmtNum(k.contratado) + " " + esc(PRODUTOS[p].unidade) + "</span>" : "") + '</h3><span class="row">' + botao("Registrar cobrança", "p", 'data-acao="nova-cobranca-marca" data-id="' + attr(m.id) + '" data-produto="' + p + '"', "bell") + (p === "brand" ? botao("Novo brand", "p prim", 'data-acao="novo-brand" data-marca="' + attr(m.id) + '"', "plus") : botao("Registrar " + PRODUTOS[p].curto.toLowerCase(), "p prim", 'data-acao="nova-entrega" data-marca="' + attr(m.id) + '" data-aut="' + attr(a ? a.id : "") + '" data-produto="' + p + '"', "plus")) + "</span></div>";
+  var ritmo = "";
+  if (k && k.contratado) {
+    var txt = [];
+    if (t != null) txt.push(t + "% do prazo passou");
+    if (k.saldo && a && a.fim && diasEntre(hoje, a.fim) > 0) { var sem = Math.max(1, Math.round(diasEntre(hoje, a.fim) / 7)); txt.push("ritmo necessário: " + fmtNum(k.saldo) + " " + PRODUTOS[p].unidade + " em " + sem + " semana" + (sem > 1 ? "s" : "") + (p !== "banner" ? " (" + (k.saldo / sem).toFixed(1).replace(".", ",") + " por semana)" : "")); }
+    if (k.saldo && a && a.fim && diasEntre(hoje, a.fim) < 0) txt.push("contrato vencido com " + fmtNum(k.saldo) + " " + PRODUTOS[p].unidade + " sem usar");
+    ritmo = barra(k.pct, classeCota(k, t), t) + '<div class="small muted mt1">' + esc(txt.join(" · ")) + "</div>";
+  } else ritmo = '<div class="small muted">Este produto não está nas cotas da autorização selecionada' + (a ? "" : " (nenhuma autorização)") + ". As entregas abaixo não contam em pacote.</div>";
+  var corpo;
+  if (p === "brand") {
+    var brands = S.d.brands.filter(function (b) { return b.marcaId === m.id && (!a || !b.autorizacaoId || b.autorizacaoId === a.id); }).sort(function (x, y) { return indiceEtapa(x.etapa) - indiceEtapa(y.etapa); });
+    corpo = brands.length ? '<div class="tabela-wrap"><table class="tabela">' + brands.map(function (b) { var e = byId(ETAPAS_BRAND, b.etapa); var d = diasParado(b); return '<tr class="clicavel" data-acao="abrir-brand" data-id="' + attr(b.id) + '"><td><strong>' + esc(b.titulo) + "</strong>" + (b.apresentador ? '<div class="small muted">' + esc(b.apresentador) + "</div>" : "") + "</td><td>" + selo(e ? e.nome : b.etapa, b.etapa === "veiculado" ? "ok" : (ETAPAS_COM_CLIENTE[b.etapa] ? "alerta" : "")) + (b.etapa !== "veiculado" && d >= 14 ? ' <span class="small muted">' + d + " d</span>" : "") + '</td><td class="nowrap mono small">' + (b.dataVeiculacao ? fmtData(b.dataVeiculacao) : (b.dataGravacao ? "grav. " + fmtDataCurta(b.dataGravacao) : "")) + "</td><td>" + (b.links && b.links.youtube ? linkExterno(b.links.youtube, "YouTube") : "") + "</td></tr>"; }).join("") + "</table></div>" : '<div class="vazio">Nenhum vídeo de brand nesta autorização.</div>';
+  } else {
+    var ents = S.d.entregas.filter(function (e) { return e.marcaId === m.id && e.produto === p && (!a || e.autorizacaoId === a.id || !e.autorizacaoId); }).sort(function (x, y) { return String(y.data).localeCompare(String(x.data)); });
+    var cols = p === "post" ? ["Rede", "Views", "Alcance", "Curtidas"] : p === "email" ? ["Base", "Aberturas", "Cliques"] : p === "banner" ? ["Mês", "Impressões"] : ["Edição", "Páginas", "Formato"];
+    function cel(e) { var mm = e.metricas || {}; if (p === "post") return [REDES[e.rede] || e.rede || "", fmtNum(mm.visualizacoes), fmtNum(mm.alcance), fmtNum(mm.curtidas)]; if (p === "email") return [fmtNum(mm.base), fmtNum(mm.aberturas), fmtNum(mm.cliques)]; if (p === "banner") return [nomeMesCurto(e.mes || mesChave(e.data)), fmtNum(mm.impressoes)]; return [nomeMesCurto(e.mes || mesChave(e.data)), String(e.quantidade || 1), e.formato || ""]; }
+    corpo = ents.length ? '<div class="tabela-wrap"><table class="tabela"><thead><tr><th>Data</th><th>Título</th>' + cols.map(function (x) { return "<th>" + x + "</th>"; }).join("") + "<th></th></tr></thead><tbody>" + ents.map(function (e) { return '<tr class="clicavel" data-acao="editar-entrega" data-id="' + attr(e.id) + '"><td class="nowrap mono">' + fmtData(e.data) + (e.status === "agendado" ? '<div class="small" style="color:var(--info)">programado</div>' : "") + "</td><td>" + esc(e.titulo || "") + (!e.autorizacaoId ? ' <span class="small muted">(fora da cota)</span>' : "") + "</td>" + cel(e).map(function (v) { return '<td class="small">' + esc(v === "0" ? "" : v) + "</td>"; }).join("") + "<td>" + linkExterno(e.link, "abrir") + "</td></tr>"; }).join("") + "</tbody></table></div>" : '<div class="vazio">Nenhuma entrega de ' + esc(PRODUTOS[p].nome.toLowerCase()) + " registrada nesta autorização.</div>";
+  }
+  return cab + '<div class="mt3 mb3">' + ritmo + "</div>" + corpo;
+}
+function painelLinhaDoAno(m, a) {
+  var hojeM = hojeISO().slice(0, 7); var meses = mesesEntre(a && a.inicio, a && a.fim);
+  var c = a ? consumo(a) : null; var produtos = c ? ORDEM_PRODUTOS.filter(function (p) { return c[p].contratado; }) : ORDEM_PRODUTOS;
+  var ents = S.d.entregas.filter(function (e) { return e.marcaId === m.id && (!a || e.autorizacaoId === a.id); });
   var brands = S.d.brands.filter(function (b) { return b.marcaId === m.id && (!a || !b.autorizacaoId || b.autorizacaoId === a.id); });
-  var entregas = S.d.entregas.filter(function (e) { return e.marcaId === m.id && (!a || e.autorizacaoId === a.id); }).sort(function (x, y) { return String(y.data).localeCompare(String(x.data)); });
-  var cobrancas = []; S.d.brands.filter(function (b) { return b.marcaId === m.id; }).forEach(function (b) { (b.cobrancas || []).forEach(function (c) { cobrancas.push({ data: c.data, texto: c.texto, ref: b.titulo, brandId: b.id }); }); });
-  cobrancas.sort(function (x, y) { return String(y.data).localeCompare(String(x.data)); });
-  var cab = '<div class="card"><div class="corpo"><div class="ficha-cab"><a href="#/marcas" class="btn icone fantasma" aria-label="Voltar">' + icone("arrow-left") + '</a><h2 class="display">' + esc(m.nome) + "</h2>" + (m.ativa === false ? selo("Inativa") : "") +
-    '<span style="margin-left:auto" class="row">' + botao("Editar marca", "p", 'data-acao="editar-marca" data-id="' + attr(m.id) + '"', "pencil") + botao("Relatório", "p preto", 'data-acao="ir-relatorio" data-marca="' + attr(m.id) + '"', "printer") + "</span></div>" +
-    (m.contato || m.obs ? '<dl class="kv mt3">' + (m.contato ? "<dt>Contato</dt><dd>" + esc(m.contato) + "</dd>" : "") + (m.obs ? "<dt>Observações</dt><dd>" + esc(m.obs) + "</dd>" : "") + "</dl>" : "") +
-    '<div class="row mt4" style="gap:6px"><span class="small muted">Autorização:</span>' + auts.map(function (x) { var s = situacaoAut(x); return '<button type="button" class="chip' + (a && a.id === x.id ? " ativo" : "") + '" data-acao="ficha-aut" data-id="' + attr(x.id) + '">' + esc(rotuloAut(x)) + " · " + esc(s.nome) + "</button>"; }).join("") + botao("Nova autorização", "p", 'data-acao="nova-aut" data-marca="' + attr(m.id) + '"', "plus") + "</div></div></div>";
-  var colAut = a ? '<div class="card"><div class="cab"><h3>' + esc(rotuloAut(a)) + "</h3>" + selo(situacaoAut(a).nome, situacaoAut(a).cls) + '</div><div class="corpo">' +
-    '<dl class="kv">' + (a.gecom ? "<dt>Gecom</dt><dd>" + esc(a.gecom) + "</dd>" : "") + "<dt>Vigência</dt><dd>" + (a.inicio ? fmtData(a.inicio) + " a " + fmtData(a.fim) : '<span class="muted">não informada</span>') + "</dd>" + (a.valor ? "<dt>Valor</dt><dd>" + fmtMoeda(a.valor) + (a.pagamento ? ' <span class="small muted">' + esc(a.pagamento) + "</span>" : "") + "</dd>" : "") + (a.contato ? "<dt>Contato</dt><dd>" + esc(a.contato) + "</dd>" : "") + (a.pdfNome ? "<dt>PDF</dt><dd>" + esc(a.pdfNome) + "</dd>" : "") + (a.obs ? "<dt>Obs.</dt><dd>" + esc(a.obs) + "</dd>" : "") + "</dl>" +
-    '<div class="row mt3">' + botao("Editar autorização", "p", 'data-acao="editar-aut" data-id="' + attr(a.id) + '"', "pencil") + (a.encerrada ? botao("Reabrir", "p", 'data-acao="encerrar-aut" data-id="' + attr(a.id) + '" data-v="0"') : botao("Encerrar", "p", 'data-acao="encerrar-aut" data-id="' + attr(a.id) + '" data-v="1"')) + "</div>" +
-    '<h3 class="mt6 mb2" style="font-size:13px">Consumo do pacote</h3>' + blocoCotas(a) + "</div></div>" : '<div class="vazio">Esta marca não tem autorização cadastrada. ' + botao("Cadastrar", "p", 'data-acao="nova-aut" data-marca="' + attr(m.id) + '"', "plus") + "</div>";
-  var abas = [["entregas", "Entregas (" + entregas.length + ")"], ["brands", "Brand (" + brands.length + ")"], ["cobrancas", "Cobranças (" + cobrancas.length + ")"]];
-  var corpoAba = "";
-  if (S.fichaAba === "brands") corpoAba = brands.length ? '<table class="tabela">' + brands.sort(function (x, y) { return indiceEtapa(x.etapa) - indiceEtapa(y.etapa); }).map(function (b) { var e = byId(ETAPAS_BRAND, b.etapa); return '<tr class="clicavel" data-acao="abrir-brand" data-id="' + attr(b.id) + '"><td><strong>' + esc(b.titulo) + "</strong>" + (b.apresentador ? '<div class="small muted">' + esc(b.apresentador) + "</div>" : "") + "</td><td>" + selo(e ? e.nome : b.etapa, b.etapa === "veiculado" ? "ok" : (ETAPAS_COM_CLIENTE[b.etapa] ? "alerta" : "")) + '</td><td class="nowrap mono">' + (b.dataVeiculacao ? fmtData(b.dataVeiculacao) : "") + "</td><td>" + (b.links && b.links.youtube ? linkExterno(b.links.youtube, "YouTube") : "") + "</td></tr>"; }).join("") + "</table>" : '<div class="vazio" style="margin:16px">Nenhum brand nesta autorização. ' + botao("Novo brand", "p", 'data-acao="novo-brand" data-marca="' + attr(m.id) + '"', "plus") + "</div>";
-  else if (S.fichaAba === "cobrancas") corpoAba = cobrancas.length ? '<table class="tabela">' + cobrancas.map(function (c) { return '<tr class="clicavel" data-acao="abrir-brand" data-id="' + attr(c.brandId) + '"><td class="nowrap mono">' + fmtData(c.data) + "</td><td>" + esc(c.texto) + '<div class="small muted">' + esc(c.ref) + "</div></td></tr>"; }).join("") + "</table>" : '<div class="vazio" style="margin:16px">Nenhuma cobrança registrada. As cobranças ficam na ficha de cada brand e servem de prova de que a revista fez a parte dela.</div>';
-  else corpoAba = entregas.length ? '<table class="tabela">' + entregas.map(function (e) { return '<tr class="clicavel" data-acao="editar-entrega" data-id="' + attr(e.id) + '"><td class="nowrap mono">' + fmtData(e.data) + "</td><td>" + tagProduto(e.produto) + "</td><td><strong>" + esc(e.titulo || "") + "</strong>" + (e.rede ? '<div class="small muted">' + esc(REDES[e.rede] || e.rede) + "</div>" : "") + "</td><td>" + (e.status === "agendado" ? selo("Programado", "info") : selo("Publicado", "ok")) + "</td><td>" + resumoMetricas(e) + "</td><td>" + linkExterno(e.link, "abrir") + "</td></tr>"; }).join("") + "</table>" : '<div class="vazio" style="margin:16px">Nenhuma entrega registrada nesta autorização. ' + botao("Registrar entrega", "p", 'data-acao="nova-entrega" data-marca="' + attr(m.id) + '" data-aut="' + attr(a ? a.id : "") + '"', "plus") + "</div>";
-  var colDir = '<div class="card"><div class="cab" style="padding:0 16px"><div class="abas">' + abas.map(function (x) { return '<button type="button" class="aba' + (S.fichaAba === x[0] ? " ativa" : "") + '" data-acao="ficha-aba" data-v="' + x[0] + '">' + esc(x[1]) + "</button>"; }).join("") + "</div>" + botao("Nova entrega", "p", 'data-acao="nova-entrega" data-marca="' + attr(m.id) + '" data-aut="' + attr(a ? a.id : "") + '"', "plus") + '</div><div class="corpo sem tabela-wrap">' + corpoAba + "</div></div>";
-  return cab + '<div class="grid ficha-grade">' + colAut + colDir + "</div>";
+  var cob = cobrancasDaMarca(m);
+  function celula(p, mes) {
+    var futuro = mes > hojeM; var pub = 0, prog = 0, prod = 0;
+    if (p === "brand") { brands.forEach(function (b) { if (b.etapa === "veiculado" && mesChave(b.dataVeiculacao) === mes) pub++; else if (b.etapa !== "veiculado" && mes === hojeM) prod++; }); }
+    else ents.forEach(function (e) { if (e.produto !== p) return; var k = (p === "banner" || p === "revista") ? (e.mes || mesChave(e.data)) : mesChave(e.data); if (k !== mes) return; var q = p === "banner" ? (+(e.metricas && e.metricas.impressoes) || 0) : (p === "revista" ? (+e.quantidade || 1) : 1); if (e.status === "agendado") prog += q; else pub += q; });
+    var cls = "ano-cel " + (pub ? "cheia " + p : (futuro ? "futura" : "vazia")); var txt = pub ? (p === "banner" ? fmtNum(pub) : String(pub)) : "";
+    if (prog) txt += (txt ? " " : "") + '<span class="prog">+' + (p === "banner" ? fmtNum(prog) : prog) + "</span>";
+    if (prod) txt += (txt ? " " : "") + '<span class="prog">' + prod + " em prod.</span>";
+    return '<div class="' + cls + '" title="' + attr(PRODUTOS[p].curto + " · " + nomeMes(mes)) + '">' + txt + "</div>";
+  }
+  var grade = '<div class="ano-grade" style="grid-template-columns:76px repeat(' + meses.length + ',minmax(0,1fr)) 56px">' +
+    '<span></span>' + meses.map(function (mes) { return '<span class="ano-cab' + (mes === hojeM ? " hoje" : "") + '">' + esc(nomeMesCurto(mes)) + "</span>"; }).join("") + '<span class="ano-cab right">total</span>' +
+    produtos.map(function (p) { var k = c ? c[p] : null; return '<span class="ano-rot ' + p + '">' + esc(PRODUTOS[p].curto) + "</span>" + meses.map(function (mes) { return celula(p, mes); }).join("") + '<span class="ano-tot ' + (k && k.contratado ? (k.saldo ? classeCota(k, tempoDecorrido(a)) || "" : "ok") : "") + '">' + (k && k.contratado ? fmtNum(k.entregue) + "/" + fmtNum(k.contratado) : "") + "</span>"; }).join("") +
+    '<span class="ano-rot muted">Cobranças</span>' + meses.map(function (mes) { var n = cob.filter(function (x) { return mesChave(x.data) === mes; }).length; return '<div class="ano-cel cob">' + (n ? icone("bell", "ic") + n : "") + "</div>"; }).join("") + '<span class="ano-tot">' + (cob.length || "") + "</span>" + "</div>";
+  return '<div class="row between"><h3>Linha do ano' + (a ? ' <span class="muted" style="font-weight:400">· ' + esc(rotuloAut(a)) + (a.inicio ? " · " + fmtData(a.inicio) + " a " + fmtData(a.fim) : "") + "</span>" : "") + "</h3>" + botao("Copiar resumo pro cliente", "p", 'data-acao="copiar-resumo" data-id="' + attr(m.id) + '"', "link") + "</div>" +
+    '<div class="mt3">' + grade + '</div><div class="small muted mt2">Cinza: mês sem entrega. Tracejado: meses que ainda vêm. Azul "+N": programado. Sino: cobrança registrada naquele mês.</div>';
+}
+function painelCobrancas(m) {
+  var cob = cobrancasDaMarca(m);
+  return '<div class="row between"><h3>Cobranças ao cliente <span class="muted" style="font-weight:400">· ' + cob.length + "</span></h3>" + botao("Registrar cobrança", "p prim", 'data-acao="nova-cobranca-marca" data-id="' + attr(m.id) + '"', "bell") + "</div>" +
+    '<div class="small muted mt1 mb3">Cada registro guarda a data. É a prova de que a revista cobrou o material e estava com o pé na entrega.</div>' +
+    (cob.length ? '<div class="tabela-wrap"><table class="tabela">' + cob.map(function (x) { return "<tr" + (x.brandId ? ' class="clicavel" data-acao="abrir-brand" data-id="' + attr(x.brandId) + '"' : "") + '><td class="nowrap mono">' + fmtData(x.data) + "</td><td>" + (x.produto ? tagProduto(x.produto) : "") + "</td><td>" + esc(x.texto) + (x.ref ? '<div class="small muted">' + esc(x.ref) + "</div>" : "") + "</td></tr>"; }).join("") + "</table></div>" : '<div class="vazio">Nenhuma cobrança registrada para esta marca.</div>');
+}
+function painelContrato(m, a) {
+  if (!a) return '<div class="vazio">Esta marca não tem autorização cadastrada. ' + botao("Cadastrar autorização", "p", 'data-acao="nova-aut" data-marca="' + attr(m.id) + '"', "plus") + "</div>";
+  var cotas = a.cotas || {};
+  return '<div class="row between"><h3>' + esc(rotuloAut(a)) + " " + selo(situacaoAut(a).nome, situacaoAut(a).cls) + '</h3><span class="row">' + botao("Editar", "p", 'data-acao="editar-aut" data-id="' + attr(a.id) + '"', "pencil") + (a.encerrada ? botao("Reabrir", "p", 'data-acao="encerrar-aut" data-id="' + attr(a.id) + '" data-v="0"') : botao("Encerrar", "p", 'data-acao="encerrar-aut" data-id="' + attr(a.id) + '" data-v="1"')) + "</span></div>" +
+    '<dl class="kv mt3">' + (a.gecom ? "<dt>Gecom</dt><dd>" + esc(a.gecom) + "</dd>" : "") + "<dt>Vigência</dt><dd>" + (a.inicio ? fmtData(a.inicio) + " a " + fmtData(a.fim) : '<span class="muted">não informada</span>') + "</dd><dt>Cotas</dt><dd>" + (temCotas(a) ? ORDEM_PRODUTOS.filter(function (p) { return cotas[p]; }).map(function (p) { return fmtNum(cotas[p]) + " " + PRODUTOS[p].unidade + " (" + PRODUTOS[p].curto + ")"; }).join(" · ") : '<span class="muted">sem cotas cadastradas</span>') + "</dd>" + (a.valor ? "<dt>Valor</dt><dd>" + fmtMoeda(a.valor) + (a.pagamento ? ' <span class="small muted">' + esc(a.pagamento) + "</span>" : "") + "</dd>" : "") + (a.contato ? "<dt>Contato</dt><dd>" + esc(a.contato) + "</dd>" : "") + (a.pdfNome ? "<dt>PDF</dt><dd>" + esc(a.pdfNome) + "</dd>" : "") + (a.obs ? "<dt>Obs.</dt><dd>" + esc(a.obs) + "</dd>" : "") + "<dt>Origem</dt><dd>" + esc(a.origem || "cadastro manual") + "</dd></dl>";
 }
 function indiceEtapa(id) { for (var i = 0; i < ETAPAS_BRAND.length; i++) if (ETAPAS_BRAND[i].id === id) return i; return 0; }
 function resumoMetricas(e) {
@@ -658,6 +736,8 @@ function dialogo() {
     case "edicao": html = formEdicao(d); break;
     case "ajuda": html = window.Tutorial ? window.Tutorial.htmlAjuda(d.secao) : ""; break;
     case "kpi": html = dialogoKpi(d.filtro); break;
+    case "texto": html = '<div class="dialogo">' + cabDialogo(d.titulo) + '<div class="corpo"><textarea class="textarea" style="min-height:200px" readonly>' + esc(d.texto) + '</textarea><div class="small muted">Selecione o texto e copie.</div></div><div class="pe">' + botao("Fechar", "", 'data-acao="fechar"') + "</div></div>"; break;
+    case "cobranca-marca": html = '<form class="dialogo" data-form="cobranca-marca">' + cabDialogo("Registrar cobrança: " + nomeMarca(d.marcaId), "Fica gravado com a data de hoje. Diga para quem, por qual canal e o que foi pedido.") + '<div class="corpo">' + campo("Produto", select("produto", [["", "Geral"]].concat(ORDEM_PRODUTOS.map(function (p) { return [p, PRODUTOS[p].nome]; })), d.produto)) + campo("O que foi cobrado", textarea("texto", "", 'required autofocus placeholder="Ex.: e-mail para o Marcos pedindo as artes dos 9 posts que faltam"')) + campo("Data", input("data", hojeISO(), "date", "required")) + "</div>" + peForm("Registrar") + "</form>"; break;
     case "confirmar": html = '<div class="dialogo"><div class="cab"><h2>' + esc(d.titulo) + '</h2></div><div class="corpo"><p style="margin:0">' + esc(d.texto) + '</p></div><div class="pe">' + botao("Cancelar", "", 'data-acao="fechar"') + botao(d.botao || "Confirmar", "perigo", 'data-acao="confirmar-ok"') + "</div></div>"; break;
   }
   return '<div class="fundo" data-acao="fechar-fundo">' + html + "</div>";
@@ -934,6 +1014,10 @@ function aoSubmeter(ev) {
       if (fila && item.status !== "agendado" && fila.status !== "publicado") { fila.status = "publicado"; API.salvar("fila", fila).then(render); }
     });
   }
+  if (tipo === "cobranca-marca") {
+    var mk = clone(marca(d.marcaId)); mk.cobrancas = mk.cobrancas || []; mk.cobrancas.push({ data: f.data || hojeISO(), texto: f.texto, produto: f.produto || null });
+    return salvar("marcas", mk, "Cobrança registrada em " + fmtData(f.data || hojeISO()) + ".");
+  }
   if (tipo === "fila") {
     item.id = item.id || uid("fila"); item.marcaId = f.marcaId; item.produto = f.produto; item.descricao = f.descricao; item.linkMaterial = f.linkMaterial; item.linkDestino = f.linkDestino; item.dataPedida = f.dataPedida || null; item.urgencia = f.urgencia; item.por = f.por; item.obs = f.obs; item.status = item.status || "aguardando"; item.criadoEm = item.criadoEm || hojeISO();
     return salvar("fila", item, item.status === "aguardando" ? "Material na fila." : "Salvo.");
@@ -987,7 +1071,9 @@ function aoClicar(ev) {
     case "brand-anotar": { var tx = document.getElementById("nota-texto").value.trim(); if (!tx) return toast("Escreva a anotação.", true); var b2 = S.dialogo.item; b2.historico = b2.historico || []; b2.historico.push({ data: hojeISO(), etapa: b2.etapa, texto: tx }); b2.atualizadoEm = hojeISO(); return guardarBrandDoForm(el.closest("form"), b2, "Anotado."); }
     case "brand-cobrar": { var tc = document.getElementById("cobranca-texto").value.trim(); if (!tc) return toast("Descreva a cobrança (para quem, por qual canal).", true); var b3 = S.dialogo.item; b3.cobrancas = b3.cobrancas || []; b3.cobrancas.push({ data: hojeISO(), texto: tc }); return guardarBrandDoForm(el.closest("form"), b3, "Cobrança registrada em " + fmtData(hojeISO()) + "."); }
     case "ref-mais": case "ref-menos": { var inp = document.getElementById("f-refacoes"); var n = Math.max(0, (+inp.value || 0) + (acao === "ref-mais" ? 1 : -1)); inp.value = n; document.getElementById("ref-n").textContent = n; return; }
-    case "nova-entrega": return abrirEntrega(null, el.getAttribute("data-marca") || "", "post", el.getAttribute("data-aut") || "");
+    case "nova-entrega": return abrirEntrega(null, el.getAttribute("data-marca") || "", el.getAttribute("data-produto") || "post", el.getAttribute("data-aut") || "");
+    case "copiar-resumo": { var mc = marca(id); var txt = resumoParaCliente(mc, aut(S.fichaAut)); var ok = function () { toast("Resumo copiado. Cole no e-mail ou no WhatsApp."); }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok, function () { S.dialogo = { tipo: "texto", titulo: "Resumo para o cliente", texto: txt }; render(); }); else { S.dialogo = { tipo: "texto", titulo: "Resumo para o cliente", texto: txt }; render(); } return; }
+    case "nova-cobranca-marca": S.dialogo = { tipo: "cobranca-marca", marcaId: id, produto: el.getAttribute("data-produto") || "" }; return render();
     case "editar-entrega": return abrirEntrega(byId(S.d.entregas, id));
     case "apagar-entrega": return confirmar("Excluir entrega", "Excluir esta entrega? Ela deixa de contar na cota.", "Excluir", function () { apagar("entregas", id, "Entrega excluída."); });
     case "tirar-imagem": S.dialogo.item = S.dialogo.item || {}; S.dialogo.item = Object.assign(lerFormParaItem(el.closest("form")), { imagem: "" }); return render();
@@ -1070,7 +1156,8 @@ document.addEventListener("click", aoClicar);
 document.addEventListener("submit", aoSubmeter);
 document.addEventListener("input", function (ev) { var f = ev.target.getAttribute && ev.target.getAttribute("data-filtro"); if (f === "busca") aoMudar(ev); });
 document.addEventListener("change", function (ev) { var f = ev.target.getAttribute && (ev.target.getAttribute("data-filtro") || ev.target.getAttribute("data-acao-arquivo")); if (f && f !== "busca") aoMudar(ev); });
-window.addEventListener("hashchange", function () { S.busca = ""; S.gavetaAberta = false; render(); });
+var rotaAnterior = rota().caminho;
+window.addEventListener("hashchange", function () { var agora = rota().caminho; if (agora !== rotaAnterior) S.busca = ""; rotaAnterior = agora; S.gavetaAberta = false; render(); });
 document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && S.dialogo) fechar(); });
 render();
 API = window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.projectId ? criarApiFirebase(window.FIREBASE_CONFIG) : criarApiLocal();

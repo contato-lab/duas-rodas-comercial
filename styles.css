@@ -303,3 +303,49 @@ body.tour-ativo{overflow:hidden}
 .indicador.clicavel:hover{box-shadow:var(--sombra-flutua);transform:translateY(-1px)}
 .indicador .ver{position:absolute;right:12px;bottom:12px;font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:2px;opacity:0;transition:opacity .12s}
 .indicador.clicavel:hover .ver{opacity:1}
+
+/* marcas: lista e ficha lado a lado */
+.md-grade{display:grid;grid-template-columns:270px minmax(0,1fr);gap:16px;align-items:start}
+.md-lista{background:var(--card);border:1px solid var(--borda);border-radius:var(--raio);box-shadow:var(--sombra);position:sticky;top:76px;max-height:calc(100vh - 100px);display:flex;flex-direction:column}
+.md-topo{padding:10px;border-bottom:1px solid var(--borda);display:flex;flex-direction:column;gap:8px}
+.md-topo .busca .input{min-width:0;width:100%}
+.md-topo .chip{padding:3px 9px;font-size:11px}
+.md-itens{overflow-y:auto;padding:6px}
+.md-item{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 8px;border-radius:var(--raio-p);text-decoration:none;color:inherit;font-size:13px}
+.md-item:hover{background:var(--hover)}
+.md-item.sel{background:var(--muted-bg);font-weight:600}
+.md-item .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.md-item .n{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.bola{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}
+.bola.atrasada{background:var(--alerta)}.bola.vencida{background:var(--erro)}.bola.futura{background:var(--info)}.bola.sem_cotas{background:transparent;border:1px dashed var(--borda-forte)}
+.md-ficha{min-width:0;display:flex;flex-direction:column;gap:12px}
+.md-vazio{padding:40px 0}
+.so-cel{display:none}
+@media (max-width:1000px){.md-grade{grid-template-columns:1fr}.md-lista{position:static;max-height:none}.md-grade.com-ficha .md-lista{display:none}.so-cel{display:inline-flex}}
+.ficha-topo{background:var(--card);border:1px solid var(--borda);border-radius:var(--raio);padding:14px 16px;display:flex;flex-direction:column;gap:4px;box-shadow:var(--sombra)}
+.prod-caixas{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+@media (max-width:700px){.prod-caixas{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.prod-caixa{background:var(--card);border:1px solid var(--borda);border-radius:var(--raio);padding:10px 12px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px;font:inherit;color:inherit;border-bottom:3px solid transparent}
+.prod-caixa:hover{background:var(--hover)}
+.prod-caixa.ativa{border-bottom-color:var(--vermelho);box-shadow:var(--sombra-flutua)}
+.prod-caixa .rot{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.prod-caixa.post .rot{color:#2563EB}.prod-caixa.brand .rot{color:var(--vermelho)}.prod-caixa.email .rot{color:#D97706}.prod-caixa.revista .rot{color:#7C3AED}.prod-caixa.banner .rot{color:#0891B2}
+.prod-caixa .num{font-family:var(--display);font-size:28px;line-height:1}
+.prod-caixa .num small{font-family:var(--fonte);font-size:12px;color:var(--muted)}
+.prod-caixa .lin{font-size:11px;color:var(--muted)}
+.prod-caixa .lin.alerta{color:var(--alerta)}.prod-caixa .lin.ok{color:var(--ok)}
+.ficha-abas{margin-top:2px}
+.painel h3{font-size:14px}
+.ano-grade{display:grid;gap:4px;align-items:center;font-size:11px}
+.ano-cab{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:center}
+.ano-cab.hoje{color:var(--vermelho);font-weight:700}
+.ano-rot{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+.ano-rot.post{color:#2563EB}.ano-rot.brand{color:var(--vermelho)}.ano-rot.email{color:#D97706}.ano-rot.revista{color:#7C3AED}.ano-rot.banner{color:#0891B2}
+.ano-cel{height:28px;border-radius:6px;background:var(--muted-bg);display:flex;align-items:center;justify-content:center;gap:3px;font-weight:600;font-size:11px;padding:0 3px;overflow:hidden}
+.ano-cel.futura{background:transparent;border:1px dashed var(--borda-forte)}
+.ano-cel.cheia.post{background:#DBEAFE;color:#1E40AF}.ano-cel.cheia.brand{background:#FDE2E2;color:#9F1D1D}.ano-cel.cheia.email{background:#FEF3C7;color:#92400E}.ano-cel.cheia.revista{background:#EDE9FE;color:#5B21B6}.ano-cel.cheia.banner{background:#CFFAFE;color:#155E75}
+html[data-tema="escuro"] .ano-cel.cheia.post{background:#1E3A8A;color:#BFDBFE}html[data-tema="escuro"] .ano-cel.cheia.brand{background:#7F1D1D;color:#FECACA}html[data-tema="escuro"] .ano-cel.cheia.email{background:#78350F;color:#FDE68A}html[data-tema="escuro"] .ano-cel.cheia.revista{background:#4C1D95;color:#DDD6FE}html[data-tema="escuro"] .ano-cel.cheia.banner{background:#164E63;color:#A5F3FC}
+.ano-cel .prog{font-weight:500;color:var(--info);font-size:10px}
+.ano-cel.cob{background:transparent;color:var(--alerta)}
+.ano-tot{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;font-size:11px}
+.ano-tot.alerta{color:var(--alerta)}.ano-tot.ok{color:var(--ok)}
