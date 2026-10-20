@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 var CHAVE = "drc-tutorial-visto";
-var VERSAO_TUTORIAL = 6;
+var VERSAO_TUTORIAL = 7;
 
 /* ============================================================ passos do passeio
    rota: para onde ir antes de mostrar o passo. alvo: lista de seletores; usa o primeiro que existir e estiver visível.
@@ -39,8 +39,8 @@ var PASSOS = [
     texto: "Quantos vídeos estão em cada fase: com o cliente, roteiro, gravação, edição e revisão, prontos para dar data. Clique numa fase para filtrar. Os créditos contratados que ainda não têm tema ficam fora do funil, agrupados em cada marca." },
   { rota: "#/brand", alvo: [".brand-card"], titulo: "Brand: um card por marca",
     texto: "Dentro do card, cada vídeo em produção com a etapa, quem está com a bola, há quantos dias e o botão da ação daquele momento: Cobrar, Roteiro pronto, Gravado, Para revisão, Enviar ao cliente, Veiculou. A linha tracejada junta os créditos sem tema, com Cobrar tema e Iniciar um. Clique no vídeo para abrir a ficha completa, com linha do tempo, cobranças e refações. A visão Lista mostra todos os vídeos ordenados por quem está parado há mais tempo." },
-  { rota: "#/edicao", alvo: ["main .card"], titulo: "Edição",
-    texto: "A fila de edição e YouTube do New: status, datas de início, finalização, revisões e ajustes. Cada data em Revisões ou Ajustes é uma ida e volta. Branded e editorial ficam juntos, com filtro." },
+  { rota: "#/edicao", alvo: [".ed-fila"], titulo: "Edição: o que fazer agora",
+    texto: "A lista do New na ordem certa: primeiro quem tem data de ir ao ar, depois branded, depois quem espera há mais tempo. Começar e Finalizado gravam a data com um clique. À direita, o que voltou com ajuste, o que espera revisão ou aprovação e o que está pronto para publicar. Cada item pode estar ligado ao vídeo do menu Brand: marcou Aprovado aqui, o vídeo vai para Definir data lá. A visão Tabela é a planilha completa, editável na linha, com cada rodada de revisão como uma data." },
   { rota: "#/calendario", alvo: [".cal"], titulo: "Calendário",
     texto: "Tudo que vai sair, por dia, de todas as marcas: post, e-mail, brand, revista, banner. Serve para responder o cliente que pergunta quando o material dele sai, sem precisar perguntar para ninguém. Clique no item para abrir." },
   { rota: "#/relatorios", alvo: ["main .card"], titulo: "Relatório por cliente",
@@ -87,9 +87,10 @@ var GUIA = [
     "Logística do produto registra se a marca manda a moto, se vamos retirar ou se o produto já está em mãos.",
     "Quando o vídeo for ao ar, cole o link do YouTube e avance para Veiculado. Ele passa a contar na cota de brand da autorização." ] },
   { titulo: "Fila de edição (New)", passos: [
-    "Vá em Edição. Clique em Novo material para incluir um vídeo na fila.",
-    "Atualize o Status conforme avança: Fila, Próximo, Edição, Revisão, Aprovação, Aprovado, Publicado.",
-    "Em Revisões e Ajustes, coloque uma data para cada rodada, separadas por vírgula. Quantas datas, quantas idas e vindas.",
+    "Vá em Edição. A lista Para editar já está na ordem: Começar quando pegar o vídeo, Finalizado quando mandar para revisão.",
+    "Voltou com ajuste e Esperando resposta têm os botões do que aconteceu: Voltou com ajuste, Ok interno, Cliente aprovou, Cliente pediu ajuste. Cada clique grava a data da rodada.",
+    "Para incluir um vídeo novo, clique em Novo material e, se for branded, escolha o vídeo de brand correspondente: assim as duas telas andam juntas.",
+    "Na visão Tabela dá para corrigir status e datas direto na linha e registrar rodadas antigas com o botão +.",
     "Cole o link de exibição (YouTube não listado) para o cliente aprovar e o link do material no Drive." ] },
   { titulo: "Gerar o relatório de um cliente", passos: [
     "Vá em Relatórios. Escolha a marca e a autorização. Se quiser só um mês, preencha o período.",

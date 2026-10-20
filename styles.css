@@ -425,3 +425,21 @@ html[data-tema="escuro"] .ano-cel.cheia.post{background:#1E3A8A;color:#BFDBFE}ht
 .checklist{display:flex;flex-wrap:wrap;gap:6px 14px}
 .check{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
 .tabela tr.linha-erro td{background:var(--erro-bg)}
+
+/* edição: fila priorizada, tabela viva */
+.ed-grade{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
+@media (max-width:1000px){.ed-grade{grid-template-columns:1fr}}
+.ed-lista{display:flex;flex-direction:column}
+.ed-linha{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--borda);cursor:pointer;font-size:13px}
+.ed-linha:last-child{border-bottom:0}
+.ed-linha:hover{background:var(--hover)}
+.ed-n{font-family:var(--display);font-size:22px;color:var(--muted);width:22px;text-align:center}
+.ed-corpo{min-width:0;display:flex;flex-direction:column;gap:2px}
+.ed-corpo .tag-produto{font-size:9.5px;vertical-align:1px}
+.refas{display:flex;gap:10px;align-items:flex-end;margin-top:8px;height:64px}
+.refas>div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;font-size:10px;color:var(--muted);height:100%}
+.refas i{display:block;width:100%;border-radius:4px 4px 0 0}
+.ed-inline{width:auto;min-width:0}
+.ed-tabela .select.p{height:28px;font-size:12px;padding:0 6px}
+.ed-tabela .input.p{height:28px;font-size:12px;padding:0 6px;width:128px}
+@media (max-width:700px){.ed-linha{grid-template-columns:auto minmax(0,1fr)}.ed-linha>.row{grid-column:1/-1;flex-wrap:wrap}}

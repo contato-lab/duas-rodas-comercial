@@ -276,7 +276,7 @@ function render() {
     case "/autorizacoes": titulo = "Autorizações"; sub = S.d.autorizacoes.length + " contratos · " + S.d.autorizacoes.filter(temCotas).length + " com cotas · as quantidades são editáveis direto na tabela"; conteudo = telaAutorizacoes(); acao = botao("Nova autorização", "prim", 'data-acao="nova-aut"', "plus"); break;
     case "/fila": titulo = "Fila de materiais"; sub = "O que chegou da marca, o que falta nele e em que dia vai sair"; conteudo = telaFila(); acao = botao("Entrou material", "prim", 'data-acao="novo-fila"', "plus"); break;
     case "/brand": titulo = "Brand"; sub = "Produção dos vídeos: quem está com a bola, há quanto tempo e o que fazer agora"; conteudo = telaBrand(); acao = botao("Novo brand", "prim", 'data-acao="novo-brand"', "plus"); break;
-    case "/edicao": titulo = "Edição"; sub = "Fila de edição e YouTube (New)"; conteudo = telaEdicao(); acao = botao("Novo material", "prim", 'data-acao="novo-edicao"', "plus"); break;
+    case "/edicao": titulo = "Edição"; sub = "O que o New edita agora, o que voltou com ajuste e o que espera resposta"; conteudo = telaEdicao(); acao = botao("Novo material", "prim", 'data-acao="novo-edicao"', "plus"); break;
     case "/calendario": titulo = "Calendário"; sub = "Tudo que vai sair, por dia"; conteudo = telaCalendario(); break;
     case "/relatorios": titulo = "Relatórios"; sub = "Relatório por cliente na identidade da revista"; conteudo = telaRelatorios(); break;
     case "/ajustes": titulo = "Ajustes"; sub = "Dados, tema e integrações"; conteudo = telaAjustes(); break;
@@ -309,7 +309,7 @@ function casca(r, titulo, sub, acao, conteudo) {
     '<div class="acoes"><button type="button" class="btn icone ajuda" data-acao="ajuda" aria-label="Ajuda e tutorial" title="Ajuda e tutorial">?</button>' + acao + "</div></header><main>" + conteudo + "</main></div>" + baixo + "</div>";
 }
 function gaveta(r) {
-  return '<div class="gaveta" data-acao="fechar-gaveta"><div class="painel" onclick="event.stopPropagation()">' +
+  return '<div class="gaveta" data-acao="fechar-gaveta"><div class="painel">' +
     '<a href="#/inicio" class="logo"><img src="logo-branco.png?v=1" alt="Duas Rodas" class="logo-img"><span class="sub">Comercial</span></a>' +
     NAV.map(function (n) { return '<a href="#' + n.to + '" class="item-lado' + (r.caminho === n.to ? " ativo" : "") + '">' + icone(n.icone) + "<span>" + esc(n.label) + "</span></a>"; }).join("") +
     '<button type="button" class="item-lado" data-acao="tema">' + icone(temaAtual() === "escuro" ? "sun" : "moon") + "<span>Estilo " + (temaAtual() === "escuro" ? "claro" : "escuro") + "</span></button>" +
@@ -645,7 +645,7 @@ function cartaoFila(f) {
     '<div class="small muted">' + tagProduto(f.produto) + (f.dataPedida ? ' · <span style="' + (risco ? "color:var(--erro);font-weight:600" : "") + '">cliente pediu ' + fmtDataExtensa(f.dataPedida) + "</span>" : " · sem data pedida") + (f.urgencia === "urgente" ? ' · <span style="color:var(--erro)">urgente</span>' : "") + (f.por ? " · " + esc(f.por) : "") + (f.origem ? " · " + esc(ORIGENS[f.origem] || f.origem) : "") + "</div>" +
     (c.total ? '<div class="chips" style="gap:4px">' + (CHECKLIST[f.produto] || []).map(function (it) { var ok = f.checklist && f.checklist[it[0]]; return '<span class="selo ' + (ok ? "ok" : "erro") + '" style="height:20px;font-size:10.5px">' + (ok ? "" : "falta ") + esc(it[1].toLowerCase()) + "</span>"; }).join("") + "</div>" : "") +
     '<div class="row small">' + (f.linkMaterial ? linkExterno(f.linkMaterial, "Material") : "") + (f.linkDestino ? linkExterno(f.linkDestino, "Link parametrizado") : "") + "</div>" +
-    '<div class="row" style="gap:6px">' + (c.completo ? botao("Dar data", "p prim", 'data-acao="alocar-fila" data-id="' + attr(f.id) + '" onclick="event.stopPropagation()"', "calendar") : botao("Pedir o que falta", "p", 'data-acao="fila-pedir" data-id="' + attr(f.id) + '" onclick="event.stopPropagation()"', "bell") + '<button type="button" class="btn p fantasma" data-acao="alocar-fila" data-id="' + attr(f.id) + '" onclick="event.stopPropagation()">dar data mesmo assim</button>') + "</div></div>";
+    '<div class="row" style="gap:6px">' + (c.completo ? botao("Dar data", "p prim", 'data-acao="alocar-fila" data-id="' + attr(f.id) + '"', "calendar") : botao("Pedir o que falta", "p", 'data-acao="fila-pedir" data-id="' + attr(f.id) + '"', "bell") + '<button type="button" class="btn p fantasma" data-acao="alocar-fila" data-id="' + attr(f.id) + '">dar data mesmo assim</button>') + "</div></div>";
 }
 function telaFila() {
   var hoje = hojeISO(); var aguardando = S.d.fila.filter(function (f) { return f.status === "aguardando"; });
@@ -677,8 +677,31 @@ function filaTabela() {
     (lista.length ? lista.map(function (f) {
       var dias = diasEntre(f.criadoEm, hoje) || 0; var c = completude(f); var ate = f.dataPedida ? diasEntre(hoje, f.dataPedida) : null;
       var st = f.status === "publicado" ? selo("Publicado", "ok") : f.status === "alocado" ? selo("Programado " + fmtDataCurta(f.dataAlocada), "info") : c.completo ? selo("Completo", "ok") : selo("Falta " + c.faltam.map(function (it) { return it[1].toLowerCase().split(" ")[0]; }).join(", "), "alerta");
-      return '<tr class="clicavel' + (f.status === "aguardando" && dias >= 5 ? " linha-erro" : "") + '" data-acao="editar-fila" data-id="' + attr(f.id) + '"><td><strong>' + esc(nomeMarca(f.marcaId)) + '</strong> · ' + esc(f.descricao || "") + '<div class="small muted">' + esc(PRODUTOS[f.produto].nome) + '</div></td><td class="nowrap"' + (f.status === "aguardando" && dias >= 5 ? ' style="color:var(--erro);font-weight:600"' : "") + ">" + (f.status === "aguardando" ? (dias ? dias + " dia" + (dias > 1 ? "s" : "") : "hoje") : "—") + '</td><td class="nowrap small">' + (f.dataPedida ? fmtData(f.dataPedida) + (ate != null && f.status === "aguardando" ? '<div style="color:var(--' + (ate <= 3 ? "erro" : "muted") + ')">' + (ate < 0 ? "passou há " + (-ate) + " d" : ate === 0 ? "é hoje" : "em " + ate + " d") + "</div>" : "") : '<span class="muted">—</span>') + '</td><td class="small">' + esc(ORIGENS[f.origem] || f.origem || "") + '</td><td class="small">' + esc(f.por || "") + "</td><td>" + st + '</td><td class="nowrap">' + (f.status === "aguardando" ? botao("Dar data", "p", 'data-acao="alocar-fila" data-id="' + attr(f.id) + '" onclick="event.stopPropagation()"', "calendar") : f.status === "alocado" && f.entregaId ? botao("Publicou", "p", 'data-acao="editar-entrega" data-id="' + attr(f.entregaId) + '" onclick="event.stopPropagation()"', "check") : "") + "</td></tr>";
+      return '<tr class="clicavel' + (f.status === "aguardando" && dias >= 5 ? " linha-erro" : "") + '" data-acao="editar-fila" data-id="' + attr(f.id) + '"><td><strong>' + esc(nomeMarca(f.marcaId)) + '</strong> · ' + esc(f.descricao || "") + '<div class="small muted">' + esc(PRODUTOS[f.produto].nome) + '</div></td><td class="nowrap"' + (f.status === "aguardando" && dias >= 5 ? ' style="color:var(--erro);font-weight:600"' : "") + ">" + (f.status === "aguardando" ? (dias ? dias + " dia" + (dias > 1 ? "s" : "") : "hoje") : "—") + '</td><td class="nowrap small">' + (f.dataPedida ? fmtData(f.dataPedida) + (ate != null && f.status === "aguardando" ? '<div style="color:var(--' + (ate <= 3 ? "erro" : "muted") + ')">' + (ate < 0 ? "passou há " + (-ate) + " d" : ate === 0 ? "é hoje" : "em " + ate + " d") + "</div>" : "") : '<span class="muted">—</span>') + '</td><td class="small">' + esc(ORIGENS[f.origem] || f.origem || "") + '</td><td class="small">' + esc(f.por || "") + "</td><td>" + st + '</td><td class="nowrap">' + (f.status === "aguardando" ? botao("Dar data", "p", 'data-acao="alocar-fila" data-id="' + attr(f.id) + '"', "calendar") : f.status === "alocado" && f.entregaId ? botao("Publicou", "p", 'data-acao="editar-entrega" data-id="' + attr(f.entregaId) + '"', "check") : "") + "</td></tr>";
     }).join("") : '<tr><td colspan="7"><div class="vazio" style="margin:16px">Nada nesse filtro.</div></td></tr>') + "</tbody></table></div></div>";
+}
+
+
+/* ============================================================ edição <-> brand (mesmo vídeo, duas telas) */
+var ED_PARA_ETAPA = { "Edição": "edicao", "Revisão": "revisao_interna", "Aprovação": "aprovacao_cliente", "Aprovado": "data_veiculacao", "Publicado": "veiculado" };
+var ETAPA_PARA_ED = { edicao: "Edição", revisao_interna: "Revisão", aprovacao_cliente: "Aprovação", data_veiculacao: "Aprovado", veiculado: "Publicado" };
+function edicaoDoBrand(brandId) { return S.d.edicao.filter(function (e) { return e.brandId === brandId; })[0] || null; }
+/* mudou o status da edição: move a etapa do vídeo ligado (só para frente) */
+function sincronizarBrandDaEdicao(ed) {
+  if (!ed.brandId) return Promise.resolve();
+  var b = byId(S.d.brands, ed.brandId); var etapa = ED_PARA_ETAPA[ed.status]; if (!b || !etapa || b.etapa === etapa) return Promise.resolve();
+  if (indiceEtapa(etapa) < indiceEtapa(b.etapa) && etapa !== "edicao") return Promise.resolve();
+  var nb = clone(b); nb.etapa = etapa; nb.historico = nb.historico || []; nb.historico.push({ data: hojeISO(), etapa: etapa, texto: "Edição marcou \"" + ed.status + "\"" }); nb.atualizadoEm = hojeISO();
+  if (etapa === "veiculado" && !nb.dataVeiculacao) nb.dataVeiculacao = hojeISO();
+  nb.links = nb.links || {}; if (ed.linkExibicao && !nb.links.naoListado) nb.links.naoListado = ed.linkExibicao; if (ed.linkMaterial && !nb.links.drive) nb.links.drive = ed.linkMaterial;
+  if (ed.ajustes && ed.ajustes.length > (nb.refacoes || 0)) nb.refacoes = ed.ajustes.length;
+  return API.salvar("brands", nb);
+}
+/* mudou a etapa do vídeo: atualiza o status do item de edição ligado */
+function sincronizarEdicaoDoBrand(b) {
+  var ed = edicaoDoBrand(b.id); var st = ETAPA_PARA_ED[b.etapa]; if (!ed || !st || ed.status === st) return Promise.resolve();
+  var ne = clone(ed); ne.status = st; if (st === "Edição" && !ne.inicio) ne.inicio = hojeISO(); if (st === "Revisão" && !ne.finalizado) ne.finalizado = hojeISO();
+  return API.salvar("edicao", ne);
 }
 
 /* crédito: vídeo contratado que ainda não tem tema (veio da planilha como "A definir") */
@@ -709,7 +732,7 @@ function avancarBrandRapido(id) {
   var b = clone(byId(S.d.brands, id)); if (!b) return; var i = indiceEtapa(b.etapa); var prox = ETAPAS_BRAND[i + 1]; if (!prox) return;
   b.etapa = prox.id; b.historico = b.historico || []; b.historico.push({ data: hojeISO(), etapa: prox.id, texto: "Avançou para " + prox.nome }); b.atualizadoEm = hojeISO();
   if (prox.id === "veiculado" && !b.dataVeiculacao) b.dataVeiculacao = hojeISO();
-  return API.salvar("brands", b).then(function () { toast(nomeMarca(b.marcaId) + " · " + b.titulo + ": " + prox.nome + "."); render(); });
+  return API.salvar("brands", b).then(function () { return sincronizarEdicaoDoBrand(b); }).then(function () { toast(nomeMarca(b.marcaId) + " · " + b.titulo + ": " + prox.nome + "."); render(); });
 }
 function proximaDataBrand(b) {
   if (b.etapa === "veiculado") return b.dataVeiculacao ? { t: "saiu " + fmtDataCurta(b.dataVeiculacao), cls: "muted" } : null;
@@ -722,7 +745,7 @@ function linhaBrand(b, mostrarMarca) {
   var trava = b.logistica && b.logistica !== "nao_precisa" && b.logistica !== "recebido" && indiceEtapa(b.etapa) <= indiceEtapa("agendar_gravacao") ? LOGISTICA[b.logistica] : "";
   return '<div class="brand-linha" data-acao="abrir-brand" data-id="' + attr(b.id) + '"><div class="t">' + (mostrarMarca ? '<span class="marca-mini">' + esc(nomeMarca(b.marcaId)) + "</span> " : "") + esc(b.titulo) + (b.apresentador ? ' <span class="muted">· ' + esc(b.apresentador) + "</span>" : "") + (trava ? ' <span class="small" style="color:var(--alerta)">· ' + esc(trava.toLowerCase()) + "</span>" : "") + (b.refacoes >= 2 ? ' <span class="small" style="color:var(--erro)">· ' + b.refacoes + " refações</span>" : "") + "</div>" +
     '<div class="row brand-dir">' + (pd ? '<span class="small" style="color:var(--' + (pd.cls === "info" ? "info" : "muted") + ')">' + esc(pd.t) + "</span>" : "") + '<span class="small ' + (cliente ? "" : "muted") + '" style="' + (cliente ? "color:var(--alerta)" : "") + '">' + esc(quemEsta(b)) + (b.etapa !== "veiculado" && d >= 7 ? " · " + d + " d" : "") + "</span>" + selo(b.etapa === "veiculado" ? (b.dataVeiculacao ? fmtDataCurta(b.dataVeiculacao) : "Veiculado") : (e.nome || b.etapa), b.etapa === "veiculado" ? "ok" : cliente ? (d >= 30 ? "erro" : "alerta") : "") +
-    (ar && b.etapa !== "veiculado" ? '<button type="button" class="btn p' + (ar.acao === "brand-cobrar-rapido" && d >= 14 ? " prim" : "") + '" data-acao="' + ar.acao + '" data-id="' + attr(b.id) + '" onclick="event.stopPropagation()">' + icone(ar.icone) + esc(ar.rotulo) + "</button>" : "") + "</div></div>";
+    (ar && b.etapa !== "veiculado" ? '<button type="button" class="btn p' + (ar.acao === "brand-cobrar-rapido" && d >= 14 ? " prim" : "") + '" data-acao="' + ar.acao + '" data-id="' + attr(b.id) + '">' + icone(ar.icone) + esc(ar.rotulo) + "</button>" : "") + "</div></div>";
 }
 function telaBrand() {
   var todos = S.d.brands.filter(function (b) { return (!S.filtroBrandMarca || b.marcaId === S.filtroBrandMarca) && (!S.filtroBrandAut || b.autorizacaoId === S.filtroBrandAut); });
@@ -769,22 +792,78 @@ function brandLista(filtrados, creditos) {
     (Object.keys(porMarcaCred).length ? '<div class="card"><div class="cab"><h2>Créditos a iniciar</h2><span class="small muted">vídeos contratados que ainda não têm tema; não contam como produção</span></div><div class="corpo chips">' + Object.keys(porMarcaCred).sort(function (a, b) { return porNome({ nome: nomeMarca(a) }, { nome: nomeMarca(b) }); }).map(function (mid) { var primeiro = creditos.filter(function (b) { return b.marcaId === mid; })[0]; return '<button type="button" class="chip" data-acao="abrir-brand" data-id="' + attr(primeiro.id) + '">' + esc(nomeMarca(mid)) + ' <span class="muted">· ' + porMarcaCred[mid] + "</span></button>"; }).join("") + "</div></div>" : "");
 }
 /* ============================================================ tela: edição (New) */
+function rodadas(e) { return (e.revisoes || []).length; }
+function statusEdicao(e, novo, extra) {
+  var ne = clone(e); var hoje = hojeISO(); ne.status = novo;
+  if (novo === "Edição" && !ne.inicio) ne.inicio = hoje;
+  if (novo === "Revisão") { ne.finalizado = ne.finalizado || hoje; ne.revisoes = ne.revisoes || []; if (ne.revisoes[ne.revisoes.length - 1] !== hoje) ne.revisoes.push(hoje); }
+  if (extra === "ajuste") { ne.ajustes = ne.ajustes || []; if (ne.ajustes[ne.ajustes.length - 1] !== hoje) ne.ajustes.push(hoje); }
+  if (novo === "Publicado" && !ne.reels) ne.reels = ne.reels || null;
+  return API.salvar("edicao", ne).then(function () { return sincronizarBrandDaEdicao(ne); }).then(function () { toast((ne.marcaId ? nomeMarca(ne.marcaId) + " · " : "") + ne.material + ": " + novo + "."); render(); });
+}
+function brandLigado(e) { return e.brandId ? byId(S.d.brands, e.brandId) : null; }
+function contextoEdicao(e) {
+  var hoje = hojeISO(); var b = brandLigado(e); var partes = [];
+  if (b && b.dataVeiculacao && b.etapa !== "veiculado") { var dd = diasEntre(hoje, b.dataVeiculacao); partes.push({ t: (dd < 0 ? "deveria ter ido ao ar em " : dd === 0 ? "vai ao ar hoje, " : "vai ao ar ") + fmtDataExtensa(b.dataVeiculacao).replace(/\/\d{4}/, ""), cls: dd <= 2 ? "erro" : "info" }); }
+  if (e.status === "Edição" && e.inicio) partes.push({ t: "em edição desde " + fmtDataCurta(e.inicio), cls: "muted" });
+  if ((e.status === "Fila" || e.status === "Próximo") && e.criadoEm) partes.push({ t: "na fila há " + diasEntre(e.criadoEm, hoje) + " d", cls: "muted" });
+  if (rodadas(e) >= 2) partes.push({ t: rodadas(e) + "ª rodada de revisão", cls: rodadas(e) >= 3 ? "erro" : "alerta" });
+  if (e.linkMaterial) partes.push({ t: "material no Drive", cls: "muted" });
+  return partes;
+}
+function linhaEdicao(e, n, botoes) {
+  var ctx = contextoEdicao(e); var b = brandLigado(e);
+  return '<div class="ed-linha" data-acao="editar-edicao" data-id="' + attr(e.id) + '">' + (n ? '<span class="ed-n">' + n + "</span>" : "") + '<div class="ed-corpo"><div><strong>' + esc(e.marcaId ? nomeMarca(e.marcaId) : "Duas Rodas") + '</strong> · ' + esc(e.material) + " " + (e.tipo === "Branded" ? '<span class="tag-produto brand">branded</span>' : '<span class="tag-produto">editorial</span>') + (b ? ' <span class="small muted">· Brand: ' + esc((byId(ETAPAS_BRAND, b.etapa) || {}).nome || "") + "</span>" : (e.tipo === "Branded" ? ' <span class="small" style="color:var(--alerta)">· sem vídeo ligado</span>' : "")) + "</div>" +
+    (ctx.length ? '<div class="small">' + ctx.map(function (c) { return '<span style="color:var(--' + (c.cls === "muted" ? "muted" : c.cls) + ')">' + esc(c.t) + "</span>"; }).join('<span class="muted"> · </span>') + "</div>" : "") + "</div>" +
+    '<div class="row" style="gap:6px;flex-wrap:nowrap">' + (e.linkExibicao ? '<a href="' + attr(e.linkExibicao) + '" target="_blank" rel="noopener" class="btn p icone fantasma" title="Vídeo não listado">' + icone("external-link") + "</a>" : "") + (e.linkMaterial ? '<a href="' + attr(e.linkMaterial) + '" target="_blank" rel="noopener" class="btn p icone fantasma" title="Material no Drive">' + icone("folder") + "</a>" : "") +
+    (botoes || []).map(function (bt) { return '<button type="button" class="btn p' + (bt.prim ? " prim" : "") + '" data-acao="ed-status" data-id="' + attr(e.id) + '" data-v="' + bt.status + '"' + (bt.extra ? ' data-extra="' + bt.extra + '"' : "") + '>' + icone(bt.icone || "arrow-right") + esc(bt.rotulo) + "</button>"; }).join("") + "</div></div>";
+}
 function telaEdicao() {
-  var lista = S.d.edicao.slice();
-  if (S.filtroEdicaoTipo) lista = lista.filter(function (e) { return (e.tipo || "") === S.filtroEdicaoTipo; });
-  if (S.filtroEdicaoStatus) lista = lista.filter(function (e) { return (e.status || "") === S.filtroEdicaoStatus; });
-  var q = S.busca.toLowerCase(); if (q) lista = lista.filter(function (e) { return ((e.marcaId ? nomeMarca(e.marcaId) : "") + " " + e.material).toLowerCase().indexOf(q) >= 0; });
-  var ordem = {}; STATUS_EDICAO.forEach(function (s, i) { ordem[s] = i; });
+  var hoje = hojeISO(); var todos = S.d.edicao.slice();
+  if (S.filtroEdicaoTipo) todos = todos.filter(function (e) { return (e.tipo || "") === S.filtroEdicaoTipo; });
+  var q = S.busca.toLowerCase(); if (q) todos = todos.filter(function (e) { return ((e.marcaId ? nomeMarca(e.marcaId) : "") + " " + e.material).toLowerCase().indexOf(q) >= 0; });
+  var emEdicao = todos.filter(function (e) { return e.status === "Edição"; }), naFila = todos.filter(function (e) { return e.status === "Fila" || e.status === "Próximo"; }), esperando = todos.filter(function (e) { return e.status === "Revisão" || e.status === "Aprovação"; }), prontos = todos.filter(function (e) { return e.status === "Aprovado"; });
+  var risco = S.d.brands.filter(function (b) { if (b.etapa === "veiculado" || !b.dataVeiculacao) return false; var dd = diasEntre(hoje, b.dataVeiculacao); return dd != null && dd <= 7 && indiceEtapa(b.etapa) < indiceEtapa("data_veiculacao"); });
+  var topo = '<div class="filtros"><div class="busca">' + icone("search") + '<input class="input" id="busca-ed" placeholder="Buscar material ou marca" value="' + attr(S.busca) + '" data-filtro="busca"></div>' + select("filtroEdicaoTipo", [["", "Branded e editorial"], ["Branded", "Só branded"], ["Editorial", "Só editorial"]], S.filtroEdicaoTipo, 'data-filtro="edTipo"') +
+    '<div class="chips" style="margin-left:auto"><button type="button" class="chip' + (S.visaoEdicao !== "tabela" ? " ativo" : "") + '" data-acao="visao-edicao" data-v="fila">O que fazer agora</button><button type="button" class="chip' + (S.visaoEdicao === "tabela" ? " ativo" : "") + '" data-acao="visao-edicao" data-v="tabela">Tabela</button></div></div>';
+  var com = todos.filter(function (e) { return rodadas(e) >= 1; }); var r1 = com.filter(function (e) { return rodadas(e) === 1; }).length, r2 = com.filter(function (e) { return rodadas(e) === 2; }).length, r3 = com.filter(function (e) { return rodadas(e) >= 3; }).length; var mx = Math.max(1, r1, r2, r3);
+  var kpis = '<div class="grid g4">' + indicador("Em edição agora", emEdicao.length) + indicador("Na fila do New", naFila.length) +
+    '<div class="indicador' + (risco.length ? " destaque" : "") + '"><span class="valor">' + risco.length + '</span><span class="rot">Vai ao ar em 7 dias e não está pronto</span>' + (risco.length ? '<div class="small mt1">' + risco.slice(0, 3).map(function (b) { return '<a href="#" data-acao="abrir-brand" data-id="' + attr(b.id) + '">' + esc(nomeMarca(b.marcaId)) + " · " + esc(b.titulo) + " (" + fmtDataCurta(b.dataVeiculacao) + ")</a>"; }).join("<br>") + "</div>" : "") + "</div>" +
+    '<div class="indicador"><span class="rot" style="margin-top:0">Idas e voltas (rodadas de revisão)</span><div class="refas"><div><i style="height:' + Math.round(r1 / mx * 40 + 4) + 'px;background:var(--ok)"></i><span>1 · ' + r1 + "</span></div><div><i style=\"height:" + Math.round(r2 / mx * 40 + 4) + 'px;background:var(--alerta)"></i><span>2 · ' + r2 + "</span></div><div><i style=\"height:" + Math.round(r3 / mx * 40 + 4) + 'px;background:var(--erro)"></i><span>3 ou mais · ' + r3 + "</span></div></div></div></div>";
+  if (S.visaoEdicao === "tabela") return topo + kpis + edicaoTabela(todos);
+  // fila priorizada: data de veiculação do brand ligado, depois branded, depois quem espera há mais tempo
+  var paraEditar = naFila.concat(emEdicao).sort(function (a, b) {
+    var ba = brandLigado(a), bb = brandLigado(b); var da = ba && ba.dataVeiculacao && ba.etapa !== "veiculado" ? ba.dataVeiculacao : "9999", db = bb && bb.dataVeiculacao && bb.etapa !== "veiculado" ? bb.dataVeiculacao : "9999";
+    if (da !== db) return da.localeCompare(db);
+    var ea = a.status === "Edição" ? 0 : 1, eb = b.status === "Edição" ? 0 : 1; if (ea !== eb) return ea - eb;
+    var ta = a.tipo === "Branded" ? 0 : 1, tb = b.tipo === "Branded" ? 0 : 1; if (ta !== tb) return ta - tb;
+    var pa = a.status === "Próximo" ? 0 : 1, pb = b.status === "Próximo" ? 0 : 1; if (pa !== pb) return pa - pb;
+    return String(a.criadoEm || a.inicio || "9").localeCompare(String(b.criadoEm || b.inicio || "9"));
+  });
+  var voltou = emEdicao.filter(function (e) { return (e.ajustes || []).length; });
+  var esq = '<div class="card ed-fila"><div class="cab"><h2>Para editar, nesta ordem</h2>' + selo(paraEditar.length + "", paraEditar.length ? "info" : "ok") + '</div><div class="corpo sem">' + (paraEditar.length ? '<div class="ed-lista">' + paraEditar.map(function (e, i) { return linhaEdicao(e, i + 1, e.status === "Edição" ? [{ status: "Revisão", rotulo: "Finalizado, para revisão", icone: "check", prim: true }] : [{ status: "Edição", rotulo: "Começar", icone: "arrow-right" }]); }).join("") + "</div>" : '<div class="vazio" style="margin:16px">Nada para editar agora.</div>') + "</div></div>";
+  var dir = '<div class="col" style="gap:12px">' +
+    '<div class="card"><div class="cab"><h3>Voltou com ajuste</h3>' + selo(voltou.length + "", voltou.length ? "alerta" : "") + '</div><div class="corpo sem">' + (voltou.length ? '<div class="ed-lista">' + voltou.map(function (e) { return linhaEdicao(e, 0, [{ status: "Revisão", rotulo: "Ajustado", icone: "check" }]); }).join("") + "</div>" : '<div class="small muted" style="padding:12px 16px">Nenhum ajuste pendente.</div>') + "</div></div>" +
+    '<div class="card"><div class="cab"><h3>Esperando resposta</h3>' + selo(esperando.length + "") + '</div><div class="corpo sem">' + (esperando.length ? '<div class="ed-lista">' + esperando.sort(function (a, b) { return (a.status === "Revisão" ? 0 : 1) - (b.status === "Revisão" ? 0 : 1); }).map(function (e) { return linhaEdicao(e, 0, e.status === "Revisão" ? [{ status: "Edição", rotulo: "Voltou com ajuste", icone: "arrow-left", extra: "ajuste" }, { status: "Aprovação", rotulo: "Ok interno, ao cliente", icone: "arrow-right" }] : [{ status: "Edição", rotulo: "Cliente pediu ajuste", icone: "arrow-left", extra: "ajuste" }, { status: "Aprovado", rotulo: "Cliente aprovou", icone: "check", prim: true }]); }).join("") + "</div>" : '<div class="small muted" style="padding:12px 16px">Nada esperando revisão ou aprovação.</div>') + "</div></div>" +
+    '<div class="card"><div class="cab"><h3>Prontos para publicar</h3>' + selo(prontos.length + "", prontos.length ? "ok" : "") + '</div><div class="corpo sem">' + (prontos.length ? '<div class="ed-lista">' + prontos.map(function (e) { return linhaEdicao(e, 0, [{ status: "Publicado", rotulo: "Publicado", icone: "check", prim: true }]); }).join("") + "</div>" : '<div class="small muted" style="padding:12px 16px">Nenhum aprovado aguardando publicação.</div>') + "</div></div></div>";
+  return topo + kpis + '<div class="grid ed-grade">' + esq + dir + "</div>";
+}
+function edicaoTabela(todos) {
+  var f = S.filtroEdicaoStatus || "andamento";
+  var lista = todos.filter(function (e) { if (f === "andamento") return ["Publicado", "Standby"].indexOf(e.status) < 0; if (f === "todos") return true; return e.status === f; });
+  var ordem = {}; STATUS_EDICAO.forEach(function (st, i) { ordem[st] = i; });
   lista.sort(function (a, b) { return ((ordem[a.status] == null ? 9 : ordem[a.status]) - (ordem[b.status] == null ? 9 : ordem[b.status])) || String(b.inicio || "").localeCompare(String(a.inicio || "")); });
-  var contagem = {}; S.d.edicao.forEach(function (e) { contagem[e.status] = (contagem[e.status] || 0) + 1; });
-  return '<div class="filtros"><div class="busca">' + icone("search") + '<input class="input" id="busca-ed" placeholder="Buscar material" value="' + attr(S.busca) + '" data-filtro="busca"></div>' +
-    select("filtroEdicaoTipo", [["", "Branded e editorial"], ["Branded", "Só branded"], ["Editorial", "Só editorial"]], S.filtroEdicaoTipo, 'data-filtro="edTipo"') + "</div>" +
-    '<div class="chips"><button type="button" class="chip' + (!S.filtroEdicaoStatus ? " ativo" : "") + '" data-acao="filtro-ed-status" data-v="">Todos</button>' + STATUS_EDICAO.map(function (s) { return '<button type="button" class="chip' + (S.filtroEdicaoStatus === s ? " ativo" : "") + '" data-acao="filtro-ed-status" data-v="' + s + '">' + s + (contagem[s] ? " (" + contagem[s] + ")" : "") + "</button>"; }).join("") + "</div>" +
-    '<div class="card"><div class="corpo sem tabela-wrap"><table class="tabela"><thead><tr><th>Marca</th><th>Material</th><th>Status</th><th>Tipo</th><th>Início</th><th>Finalizado</th><th>Revisões</th><th>Ajustes</th><th>Reels</th><th>Links</th></tr></thead><tbody>' +
-    (lista.length ? lista.slice(0, 200).map(function (e) {
-      var rev = (e.revisoes || []).length, aj = (e.ajustes || []).length;
-      return '<tr class="clicavel" data-acao="editar-edicao" data-id="' + attr(e.id) + '"><td><strong>' + esc(e.marcaId ? nomeMarca(e.marcaId) : "") + "</strong></td><td>" + esc(e.material) + "</td><td>" + selo(e.status || "", e.status === "Publicado" || e.status === "Aprovado" ? "ok" : (e.status === "Aprovação" || e.status === "Revisão" ? "alerta" : (e.status === "Standby" ? "" : "info"))) + "</td><td class=\"small\">" + esc(e.tipo || "") + '</td><td class="nowrap mono small">' + fmtDataCurta(e.inicio) + '</td><td class="nowrap mono small">' + fmtDataCurta(e.finalizado) + '</td><td class="small">' + (rev ? rev + "× <span class=\"muted\">" + esc((e.revisoes || []).map(fmtDataCurta).join(", ")) + "</span>" : "") + '</td><td class="small">' + (aj ? aj + "× <span class=\"muted\">" + esc((e.ajustes || []).map(fmtDataCurta).join(", ")) + "</span>" : "") + '</td><td class="nowrap mono small">' + fmtDataCurta(e.reels) + '</td><td class="small nowrap">' + (e.linkExibicao ? linkExterno(e.linkExibicao, "vídeo") : "") + " " + (e.linkMaterial ? linkExterno(e.linkMaterial, "material") : "") + "</td></tr>";
-    }).join("") : '<tr><td colspan="10"><div class="vazio" style="margin:16px">Nada nesse filtro.</div></td></tr>') + "</tbody></table></div></div>";
+  function pills(e, campo) { var l = e[campo] || []; return l.map(function (d, i) { var cls = campo === "revisoes" ? (i >= 2 ? "erro" : "alerta") : "info"; return '<span class="selo ' + cls + '" style="height:20px;font-size:10.5px" title="' + attr(d) + '">' + esc(/^\d{4}-\d{2}-\d{2}$/.test(d) ? fmtDataCurta(d) : d) + "</span>"; }).join(" ") + ' <button type="button" class="chip" style="padding:0 7px;font-size:11px" data-acao="ed-rodada" data-id="' + attr(e.id) + '" data-v="' + campo + '" title="Registrar mais uma rodada hoje">+</button>'; }
+  return '<div class="chips">' + [["andamento", "Em andamento"], ["Publicado", "Publicados"], ["Standby", "Standby"], ["todos", "Tudo"]].map(function (o) { return '<button type="button" class="chip' + (f === o[0] ? " ativo" : "") + '" data-acao="filtro-ed-status" data-v="' + o[0] + '">' + o[1] + "</button>"; }).join("") + "</div>" +
+    '<div class="card"><div class="corpo sem tabela-wrap"><table class="tabela ed-tabela"><thead><tr><th>Material</th><th>Status</th><th>Início</th><th>Finalizado</th><th>Revisões</th><th>Ajustes</th><th>Reels</th><th>Links</th></tr></thead><tbody>' +
+    (lista.length ? lista.slice(0, 250).map(function (e) {
+      var b = brandLigado(e);
+      return '<tr><td><strong>' + esc(e.marcaId ? nomeMarca(e.marcaId) : "Duas Rodas") + "</strong> · " + esc(e.material) + '<div class="small">' + (e.tipo === "Branded" ? '<span class="tag-produto brand">branded</span>' : '<span class="tag-produto">editorial</span>') + (b ? ' <span class="muted">ligado a: ' + esc(b.titulo) + "</span>" : "") + ' <button type="button" class="chip" style="padding:0 7px;font-size:11px" data-acao="editar-edicao" data-id="' + attr(e.id) + '">editar</button></div></td>' +
+        '<td><select class="select p ed-inline" data-ed-id="' + attr(e.id) + '" data-ed-campo="status">' + STATUS_EDICAO.map(function (st) { return '<option' + (st === e.status ? " selected" : "") + ">" + st + "</option>"; }).join("") + "</select></td>" +
+        '<td><input type="date" class="input p ed-inline" value="' + attr(e.inicio || "") + '" data-ed-id="' + attr(e.id) + '" data-ed-campo="inicio"></td><td><input type="date" class="input p ed-inline" value="' + attr(e.finalizado || "") + '" data-ed-id="' + attr(e.id) + '" data-ed-campo="finalizado"></td>' +
+        '<td class="small">' + pills(e, "revisoes") + '</td><td class="small">' + pills(e, "ajustes") + '</td><td><input type="date" class="input p ed-inline" value="' + attr(e.reels || "") + '" data-ed-id="' + attr(e.id) + '" data-ed-campo="reels"></td>' +
+        '<td class="nowrap">' + (e.linkExibicao ? '<a href="' + attr(e.linkExibicao) + '" target="_blank" rel="noopener" class="btn p icone fantasma" title="Vídeo não listado">' + icone("external-link") + "</a>" : "") + (e.linkMaterial ? '<a href="' + attr(e.linkMaterial) + '" target="_blank" rel="noopener" class="btn p icone fantasma" title="Material no Drive">' + icone("folder") + "</a>" : "") + "</td></tr>";
+    }).join("") : '<tr><td colspan="8"><div class="vazio" style="margin:16px">Nada nesse filtro.</div></td></tr>') + "</tbody></table></div></div>";
 }
 
 /* ============================================================ tela: calendário */
@@ -1014,8 +1093,10 @@ function formAlocar(d) {
 }
 function formEdicao(d) {
   var e = d.item || { marcaId: "", material: "", status: "Fila", tipo: "Branded", inicio: "", finalizado: "", revisoes: [], ajustes: [], reels: "", linkExibicao: "", linkMaterial: "", obs: "" };
+  var brandsDaMarca = e.marcaId ? S.d.brands.filter(function (b) { return b.marcaId === e.marcaId && !ehCredito(b); }).sort(function (a, b) { return (a.etapa === "veiculado" ? 1 : 0) - (b.etapa === "veiculado" ? 1 : 0) || String(a.titulo).localeCompare(String(b.titulo)); }) : [];
   return '<form class="dialogo" data-form="edicao">' + cabDialogo(e.id ? "Editar material" : "Novo material na edição", "Fila de edição e YouTube. Cada revisão e ajuste é uma data; quantas datas, quantas idas e vindas.") + '<div class="corpo">' +
-    '<div class="grid g2">' + campo("Marca", select("marcaId", opcoesMarcas("Editorial / sem marca"), e.marcaId)) + campo("Material", input("material", e.material, "text", "required")) + "</div>" +
+    '<div class="grid g2">' + campo("Marca", select("marcaId", opcoesMarcas("Editorial / sem marca"), e.marcaId, 'data-filtro="edFormMarca"')) + campo("Material", input("material", e.material, "text", "required")) + "</div>" +
+    (e.marcaId && e.tipo !== "Editorial" ? campo("Vídeo de brand correspondente", select("brandId", [["", "Nenhum (não liga ao Brand)"]].concat(brandsDaMarca.map(function (b) { return [b.id, b.titulo + " · " + ((byId(ETAPAS_BRAND, b.etapa) || {}).nome || "")]; })), e.brandId || ""), "Ligando, o status daqui move a etapa lá e vice-versa: Edição, Revisão, Aprovação, Aprovado (vira Definir data) e Publicado (vira Veiculado).") : "") +
     '<div class="grid g2">' + campo("Status", select("status", STATUS_EDICAO.map(function (s) { return [s, s]; }), e.status)) + campo("Tipo", select("tipo", [["Branded", "Branded"], ["Editorial", "Editorial"]], e.tipo)) + "</div>" +
     '<div class="grid g3">' + campo("Início", input("inicio", e.inicio, "date")) + campo("Finalizado", input("finalizado", e.finalizado, "date")) + campo("Reels", input("reels", e.reels, "date")) + "</div>" +
     '<div class="grid g2">' + campo("Revisões (datas)", input("revisoes", (e.revisoes || []).join(", ")), "Separe por vírgula. Ex.: 2026-09-24, 2026-10-01") + campo("Ajustes (datas)", input("ajustes", (e.ajustes || []).join(", ")), "Cada data é uma rodada de ajuste") + "</div>" +
@@ -1170,7 +1251,7 @@ function aoSubmeter(ev) {
     if (!novo && etapaAntes !== item.etapa) { item.historico.push({ data: hojeISO(), etapa: item.etapa, texto: "Etapa mudou de " + (byId(ETAPAS_BRAND, etapaAntes) || {}).nome + " para " + (byId(ETAPAS_BRAND, item.etapa) || {}).nome }); item.atualizadoEm = hojeISO(); }
     if (novo) item.atualizadoEm = hojeISO();
     if (!item.marcaId || !item.titulo) return toast("Marca e tema são obrigatórios.", true);
-    return salvar("brands", item, "Brand salvo.");
+    return API.salvar("brands", item).then(function () { return etapaAntes !== item.etapa ? sincronizarEdicaoDoBrand(item) : null; }).then(function () { toast("Brand salvo."); S.dialogo = null; render(); }).catch(function (e) { toast("Não salvou: " + e.message, true); });
   }
   if (tipo === "entrega") {
     item.id = item.id || uid("ent"); item.marcaId = f.marcaId; item.autorizacaoId = f.autorizacaoId || null; item.produto = f.produto; item.data = f.data; item.status = f.status; item.titulo = f.titulo; item.link = f.link; item.rede = f.rede || null; item.obs = f.obs; item.mes = f.mes || mesChave(f.data); item.quantidade = f.quantidade ? +f.quantidade : (item.produto === "revista" ? 1 : null); item.formato = f.formato || null; item.imagem = f.imagem || null;
@@ -1202,12 +1283,14 @@ function aoSubmeter(ev) {
   }
   if (tipo === "edicao") {
     function listaDatas(s) { return String(s || "").split(",").map(function (x) { return x.trim(); }).filter(Boolean); }
-    item.id = item.id || uid("ed"); item.marcaId = f.marcaId || null; item.material = f.material; item.status = f.status; item.tipo = f.tipo; item.inicio = f.inicio || null; item.finalizado = f.finalizado || null; item.reels = f.reels || null; item.revisoes = listaDatas(f.revisoes); item.ajustes = listaDatas(f.ajustes); item.linkExibicao = f.linkExibicao; item.linkMaterial = f.linkMaterial; item.obs = f.obs;
-    return salvar("edicao", item, "Material salvo.");
+    var statusAntes = item.status; item.id = item.id || uid("ed"); item.marcaId = f.marcaId || null; item.material = f.material; item.status = f.status; item.tipo = f.tipo; item.inicio = f.inicio || null; item.finalizado = f.finalizado || null; item.reels = f.reels || null; item.revisoes = listaDatas(f.revisoes); item.ajustes = listaDatas(f.ajustes); item.linkExibicao = f.linkExibicao; item.linkMaterial = f.linkMaterial; item.obs = f.obs; item.brandId = f.brandId || null; item.criadoEm = item.criadoEm || hojeISO();
+    return API.salvar("edicao", item).then(function () { return statusAntes !== item.status || f.brandId ? sincronizarBrandDaEdicao(item) : null; }).then(function () { toast("Material salvo."); S.dialogo = null; render(); }).catch(function (e2) { toast("Não salvou: " + e2.message, true); });
   }
 }
 
 function aoClicar(ev) {
+  // link externo dentro de uma linha clicável: deixa o link abrir e não abre a ficha
+  var link = ev.target.closest && ev.target.closest("a[href]"); if (link && !link.hasAttribute("data-acao") && link.getAttribute("target") === "_blank") return;
   var el = ev.target.closest("[data-acao]"); if (!el) return;
   var acao = el.getAttribute("data-acao"), id = el.getAttribute("data-id"), v = el.getAttribute("data-v");
   if (acao === "fechar-fundo") { if (ev.target !== el) return; return fechar(); }
@@ -1231,6 +1314,9 @@ function aoClicar(ev) {
     case "fila-semana": S.filaSemana = +v; return render();
     case "fila-pedir": { var fp = byId(S.d.fila, id); var tp = textoPedirFalta(fp); var okp = function () { toast("Texto copiado. Cole no WhatsApp ou no e-mail da marca."); }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(tp).then(okp, function () { S.dialogo = { tipo: "texto", titulo: "Pedir o que falta", texto: tp }; render(); }); else { S.dialogo = { tipo: "texto", titulo: "Pedir o que falta", texto: tp }; render(); } return; }
     case "filtro-ed-status": S.filtroEdicaoStatus = v; return render();
+    case "visao-edicao": S.visaoEdicao = v; return render();
+    case "ed-status": return statusEdicao(byId(S.d.edicao, id), v, el.getAttribute("data-extra"));
+    case "ed-rodada": { var er = clone(byId(S.d.edicao, id)); er[v] = er[v] || []; er[v].push(hojeISO()); if (v === "ajustes" && er.brandId) { var bl = byId(S.d.brands, er.brandId); } return API.salvar("edicao", er).then(function () { return sincronizarBrandDaEdicao(er); }).then(function () { toast("Rodada registrada em " + fmtData(hojeISO()) + "."); render(); }); }
     case "ficha-aut": S.fichaAut = id; return render();
     case "ficha-aba": S.fichaAba = v; return render();
     case "cal-mes": S.calMes = v; return render();
@@ -1288,7 +1374,7 @@ function guardarBrandDoForm(formEl, b, msg) {
   b.marcaId = f.marcaId; b.autorizacaoId = f.autorizacaoId || null; b.titulo = f.titulo; b.apresentador = f.apresentador; b.local = f.local; b.logistica = f.logistica; b.dataGravacao = f.dataGravacao || b.dataGravacao || null; b.dataVeiculacao = f.dataVeiculacao || b.dataVeiculacao || null; b.refacoes = +f.refacoes || 0; b.custo = num(f.custo); b.obs = f.obs;
   b.links = { drive: f.link_drive, naoListado: f.link_naoListado, youtube: f.link_youtube, reels: f.link_reels, final: f.link_final, thumb: f.link_thumb };
   if (!b.id) b.id = uid("brand");
-  return API.salvar("brands", b).then(function () { toast(msg); S.dialogo.item = clone(b); render(); });
+  return API.salvar("brands", b).then(function () { return sincronizarEdicaoDoBrand(b); }).then(function () { toast(msg); S.dialogo.item = clone(b); render(); });
 }
 function aoMudar(ev) {
   var el = ev.target; var filtro = el.getAttribute("data-filtro"); var arq = el.getAttribute("data-acao-arquivo");
@@ -1313,6 +1399,8 @@ function aoMudar(ev) {
     var img = el.files[0]; if (!img) return;
     return reduzirImagem(img, 1200).then(function (dataUrl) { var it = lerFormParaItem(el.closest("form")); it.imagem = dataUrl; S.dialogo.item = it; render(); }).catch(function () { toast("Não consegui ler a imagem.", true); });
   }
+  var edId = el.getAttribute && el.getAttribute("data-ed-id");
+  if (edId) { var ee = clone(byId(S.d.edicao, edId)); var campoEd = el.getAttribute("data-ed-campo"); ee[campoEd] = el.value || null; return API.salvar("edicao", ee).then(function () { return campoEd === "status" ? sincronizarBrandDaEdicao(ee) : null; }).then(function () { toast("Salvo."); render(); }); }
   var cotaAut = el.getAttribute && el.getAttribute("data-cota-aut");
   if (cotaAut) {
     var ca = clone(aut(cotaAut)); if (!ca) return; ca.cotas = ca.cotas || {}; var pv = num(el.value); var pr = el.getAttribute("data-cota-produto");
@@ -1332,6 +1420,7 @@ function aoMudar(ev) {
     case "relAte": S.relAte = val; break;
     case "brandFormMarca": case "entregaFormMarca": { var it2 = lerFormParaItem(el.closest("form")); it2.autorizacaoId = ""; S.dialogo.item = it2; break; }
     case "entregaFormProduto": { var it3 = lerFormParaItem(el.closest("form")); S.dialogo.item = it3; break; }
+    case "edFormMarca": { var it5 = lerFormParaItem(el.closest("form")); it5.brandId = ""; S.dialogo.item = it5; break; }
     case "filaProduto": { var it4 = lerFormParaItem(el.closest("form")); it4.checklist = {}; S.dialogo.item = it4; break; }
     case "filaDescricao": { var fm = el.closest("form"); if (fm.marcaId.value) return; var txt = val.toLowerCase(); var achou = S.d.marcas.filter(function (m) { var n = m.nome.toLowerCase().split(/[\/(]/)[0].trim(); return n.length >= 3 && txt.indexOf(n) >= 0; })[0]; if (achou) { fm.marcaId.value = achou.id; toast("Marca reconhecida: " + achou.nome); } return; }
   }
@@ -1349,7 +1438,7 @@ function reduzirImagem(file, max) {
 document.addEventListener("click", aoClicar);
 document.addEventListener("submit", aoSubmeter);
 document.addEventListener("input", function (ev) { var f = ev.target.getAttribute && ev.target.getAttribute("data-filtro"); if (f === "busca" || f === "filaDescricao") aoMudar(ev); });
-document.addEventListener("change", function (ev) { var f = ev.target.getAttribute && (ev.target.getAttribute("data-filtro") || ev.target.getAttribute("data-acao-arquivo") || ev.target.getAttribute("data-cota-aut")); if (f && f !== "busca" && f !== "filaDescricao") aoMudar(ev); });
+document.addEventListener("change", function (ev) { var f = ev.target.getAttribute && (ev.target.getAttribute("data-filtro") || ev.target.getAttribute("data-acao-arquivo") || ev.target.getAttribute("data-cota-aut") || ev.target.getAttribute("data-ed-id")); if (f && f !== "busca" && f !== "filaDescricao") aoMudar(ev); });
 var rotaAnterior = rota().caminho;
 window.addEventListener("hashchange", function () { var agora = rota().caminho; if (agora !== rotaAnterior) S.busca = ""; rotaAnterior = agora; S.gavetaAberta = false; render(); });
 document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && S.dialogo) fechar(); });
