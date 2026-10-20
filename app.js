@@ -38,6 +38,14 @@ var LOGISTICA = {
 };
 var STATUS_EDICAO = ["Fila", "Próximo", "Edição", "Revisão", "Aprovação", "Aprovado", "Publicado", "Standby"];
 var URGENCIAS = { normal: "Normal", data_pedida: "Cliente pediu data", urgente: "Urgente" };
+var CHECKLIST = {
+  post:    [["arte", "Arte (cards ou vídeo)"], ["legenda", "Legenda"], ["link", "Link parametrizado"]],
+  email:   [["html", "HTML ou arte do e-mail"], ["assunto", "Assunto e remetente"], ["link", "Link parametrizado"], ["base", "Base definida"]],
+  banner:  [["pecas", "Peças nos tamanhos do site"], ["link", "Link parametrizado"]],
+  revista: [["pdf", "PDF da página fechado"]],
+  brand:   [["material", "Produto ou moto combinados"], ["tema", "Tema aprovado"]]
+};
+var ORIGENS = { whatsapp: "WhatsApp", email: "E-mail", drive: "Drive", outro: "Outro" };
 var REDES = { instagram: "Instagram", facebook: "Facebook", instagram_facebook: "Instagram e Facebook", youtube: "YouTube", site: "Site", email: "E-mail" };
 var NAV = [
   { to: "/inicio",        label: "Visão geral",    curto: "Início",    icone: "layout-dashboard" },
@@ -266,7 +274,7 @@ function render() {
       titulo = "Marcas"; sub = S.d.marcas.length + " marcas cadastradas · clique numa marca para abrir a ficha ao lado"; conteudo = telaMarcas(r.id && marca(r.id) ? r.id : ""); acao = botao("Nova marca", "prim", 'data-acao="nova-marca"', "plus");
       break;
     case "/autorizacoes": titulo = "Autorizações"; sub = S.d.autorizacoes.length + " contratos · " + S.d.autorizacoes.filter(temCotas).length + " com cotas · as quantidades são editáveis direto na tabela"; conteudo = telaAutorizacoes(); acao = botao("Nova autorização", "prim", 'data-acao="nova-aut"', "plus"); break;
-    case "/fila": titulo = "Fila de materiais"; sub = "O que o atendimento recebeu e ainda não tem data"; conteudo = telaFila(); acao = botao("Entrou material", "prim", 'data-acao="novo-fila"', "plus"); break;
+    case "/fila": titulo = "Fila de materiais"; sub = "O que chegou da marca, o que falta nele e em que dia vai sair"; conteudo = telaFila(); acao = botao("Entrou material", "prim", 'data-acao="novo-fila"', "plus"); break;
     case "/brand": titulo = "Brand"; sub = "Produção dos vídeos: quem está com a bola, há quanto tempo e o que fazer agora"; conteudo = telaBrand(); acao = botao("Novo brand", "prim", 'data-acao="novo-brand"', "plus"); break;
     case "/edicao": titulo = "Edição"; sub = "Fila de edição e YouTube (New)"; conteudo = telaEdicao(); acao = botao("Novo material", "prim", 'data-acao="novo-edicao"', "plus"); break;
     case "/calendario": titulo = "Calendário"; sub = "Tudo que vai sair, por dia"; conteudo = telaCalendario(); break;
@@ -623,23 +631,56 @@ function abrirSequencia(ids, i) {
 }
 
 /* ============================================================ tela: fila de materiais */
+function completude(f) { var itens = CHECKLIST[f.produto] || []; var ok = itens.filter(function (it) { return f.checklist && f.checklist[it[0]]; }).length; return { ok: ok, total: itens.length, faltam: itens.filter(function (it) { return !(f.checklist && f.checklist[it[0]]); }), completo: ok === itens.length }; }
+function textoPedirFalta(f) {
+  var c = completude(f); var m = nomeMarca(f.marcaId);
+  return "Oi! Para programar o " + PRODUTOS[f.produto].curto.toLowerCase() + " \"" + (f.descricao || "") + "\" da " + m + " ainda falta: " + c.faltam.map(function (it) { return it[1].toLowerCase(); }).join(", ") + ". Pode mandar? Assim que chegar a gente coloca na programação" + (f.dataPedida ? " para " + fmtData(f.dataPedida) : "") + ".";
+}
+function cartaoFila(f) {
+  var hoje = hojeISO(); var dias = diasEntre(f.criadoEm, hoje) || 0; var c = completude(f);
+  var corDias = dias >= 5 ? "var(--erro)" : dias >= 2 ? "var(--alerta)" : "var(--muted)";
+  var risco = f.dataPedida && diasEntre(hoje, f.dataPedida) != null && diasEntre(hoje, f.dataPedida) <= 3;
+  return '<div class="fila-card' + (dias >= 5 ? " urgente" : dias >= 2 ? " atencao" : "") + '" draggable="true" data-fila-id="' + attr(f.id) + '" data-acao="editar-fila" data-id="' + attr(f.id) + '">' +
+    '<div class="row between" style="flex-wrap:nowrap"><strong>' + esc(nomeMarca(f.marcaId)) + ' <span class="muted" style="font-weight:400">· ' + esc(f.descricao || PRODUTOS[f.produto].nome) + '</span></strong><span class="small nowrap" style="color:' + corDias + '">' + (dias ? dias + " dia" + (dias > 1 ? "s" : "") : "hoje") + "</span></div>" +
+    '<div class="small muted">' + tagProduto(f.produto) + (f.dataPedida ? ' · <span style="' + (risco ? "color:var(--erro);font-weight:600" : "") + '">cliente pediu ' + fmtDataExtensa(f.dataPedida) + "</span>" : " · sem data pedida") + (f.urgencia === "urgente" ? ' · <span style="color:var(--erro)">urgente</span>' : "") + (f.por ? " · " + esc(f.por) : "") + (f.origem ? " · " + esc(ORIGENS[f.origem] || f.origem) : "") + "</div>" +
+    (c.total ? '<div class="chips" style="gap:4px">' + (CHECKLIST[f.produto] || []).map(function (it) { var ok = f.checklist && f.checklist[it[0]]; return '<span class="selo ' + (ok ? "ok" : "erro") + '" style="height:20px;font-size:10.5px">' + (ok ? "" : "falta ") + esc(it[1].toLowerCase()) + "</span>"; }).join("") + "</div>" : "") +
+    '<div class="row small">' + (f.linkMaterial ? linkExterno(f.linkMaterial, "Material") : "") + (f.linkDestino ? linkExterno(f.linkDestino, "Link parametrizado") : "") + "</div>" +
+    '<div class="row" style="gap:6px">' + (c.completo ? botao("Dar data", "p prim", 'data-acao="alocar-fila" data-id="' + attr(f.id) + '" onclick="event.stopPropagation()"', "calendar") : botao("Pedir o que falta", "p", 'data-acao="fila-pedir" data-id="' + attr(f.id) + '" onclick="event.stopPropagation()"', "bell") + '<button type="button" class="btn p fantasma" data-acao="alocar-fila" data-id="' + attr(f.id) + '" onclick="event.stopPropagation()">dar data mesmo assim</button>') + "</div></div>";
+}
 function telaFila() {
-  var lista = S.d.fila.slice();
-  if (S.filtroFila === "aguardando") lista = lista.filter(function (f) { return f.status === "aguardando"; });
-  else if (S.filtroFila === "alocado") lista = lista.filter(function (f) { return f.status === "alocado"; });
-  var peso = { urgente: 0, data_pedida: 1, normal: 2 };
-  lista.sort(function (a, b) { return (peso[a.urgencia] - peso[b.urgencia]) || String(a.dataPedida || "9").localeCompare(String(b.dataPedida || "9")) || String(a.criadoEm).localeCompare(String(b.criadoEm)); });
-  return '<div class="alerta-box info">' + icone("info") + '<span class="t">O atendimento registra aqui tudo que a marca mandou (arquivo no Drive, link parametrizado, texto). Igor e Isa escolhem a data e o item vira uma entrega programada no calendário. A ordem é por urgência e data pedida, não por chegada.</span></div>' +
-    '<div class="chips">' + [["aguardando", "Aguardando data"], ["alocado", "Com data"], ["todos", "Todos"]].map(function (o) { return '<button type="button" class="chip' + (S.filtroFila === o[0] ? " ativo" : "") + '" data-acao="filtro-fila" data-v="' + o[0] + '">' + o[1] + "</button>"; }).join("") + "</div>" +
-    '<div class="card"><div class="corpo sem">' + (lista.length ? lista.map(function (f, i) {
-      return '<div class="fila-item"><span class="pos">' + (i + 1) + '</span><div><div class="row"><span class="t">' + esc(nomeMarca(f.marcaId)) + "</span>" + tagProduto(f.produto) + (f.urgencia !== "normal" ? selo(URGENCIAS[f.urgencia], f.urgencia === "urgente" ? "erro" : "alerta") : "") + (f.status === "alocado" ? selo("Programado para " + fmtData(f.dataAlocada), "info") : "") + (f.status === "publicado" ? selo("Publicado", "ok") : "") + "</div>" +
-        '<div class="d">' + esc(f.descricao || "") + (f.dataPedida ? " · cliente pediu " + fmtData(f.dataPedida) : "") + " · entrou " + fmtData(f.criadoEm) + (f.por ? " por " + esc(f.por) : "") + "</div>" +
-        '<div class="row small mt1">' + (f.linkMaterial ? linkExterno(f.linkMaterial, "Material") : "") + (f.linkDestino ? linkExterno(f.linkDestino, "Link parametrizado") : "") + "</div></div>" +
-        '<div class="row">' + (f.status === "aguardando" ? botao("Dar data", "p prim", 'data-acao="alocar-fila" data-id="' + attr(f.id) + '"', "calendar") : "") + botao("", "p icone", 'data-acao="editar-fila" data-id="' + attr(f.id) + '" aria-label="Editar"', "pencil") + "</div></div>";
-    }).join("") : '<div class="vazio" style="margin:16px">Nada na fila. ' + botao("Entrou material", "p", 'data-acao="novo-fila"', "plus") + "</div>") + "</div></div>";
+  var hoje = hojeISO(); var aguardando = S.d.fila.filter(function (f) { return f.status === "aguardando"; });
+  var peso = { urgente: 0, data_pedida: 1, normal: 2 }; aguardando.sort(function (a, b) { return (peso[a.urgencia] - peso[b.urgencia]) || String(a.dataPedida || "9").localeCompare(String(b.dataPedida || "9")) || String(a.criadoEm).localeCompare(String(b.criadoEm)); });
+  var incompletos = aguardando.filter(function (f) { return !completude(f).completo; }).length;
+  var cab = '<div class="filtros"><div class="small muted">' + aguardando.length + " aguardando data" + (incompletos ? " · " + incompletos + " incompleto" + (incompletos > 1 ? "s" : "") : "") + " · " + S.d.entregas.filter(function (e) { return e.status === "agendado"; }).length + ' programados</div><div class="chips" style="margin-left:auto"><button type="button" class="chip' + (S.visaoFila !== "tabela" ? " ativo" : "") + '" data-acao="visao-fila" data-v="colunas">Chegou e semana</button><button type="button" class="chip' + (S.visaoFila === "tabela" ? " ativo" : "") + '" data-acao="visao-fila" data-v="tabela">Tabela</button></div></div>';
+  if (S.visaoFila === "tabela") return cab + filaTabela();
+  // coluna direita: semana
+  var seg = somaDias(inicioSemana(hoje), 7 * (S.filaSemana || 0)); var dom = somaDias(seg, 6);
+  var ev = eventosCalendario().filter(function (e) { return e.data >= seg && e.data <= dom; });
+  var pedidas = aguardando.filter(function (f) { return f.dataPedida && f.dataPedida >= seg && f.dataPedida <= dom; });
+  var dias = ""; for (var i = 0; i < 7; i++) {
+    var iso = somaDias(seg, i); var d = parseISO(iso); var lista = ev.filter(function (e) { return e.data === iso; }); var ped = pedidas.filter(function (f) { return f.dataPedida === iso; });
+    dias += '<div class="prog-dia' + (iso === hoje ? " hoje" : "") + (iso < hoje ? " passado" : "") + '" data-dia="' + iso + '"><span class="d">' + ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"][i] + " " + d.getDate() + (iso === hoje ? " · hoje" : "") + '</span><div class="itens">' +
+      lista.map(function (e) { return '<div class="evento ' + e.produto + '" data-acao="abrir-evento" data-tipo="' + e.tipo + '" data-id="' + attr(e.id) + '">' + esc(PRODUTOS[e.produto] ? PRODUTOS[e.produto].curto.toLowerCase() : e.produto) + " · " + esc(e.marca) + " · " + esc(e.titulo) + "</div>"; }).join("") +
+      ped.map(function (f) { return '<div class="evento pedido" data-acao="alocar-fila" data-id="' + attr(f.id) + '">' + esc(nomeMarca(f.marcaId)) + " pediu esta data · " + esc(f.descricao || "") + "</div>"; }).join("") +
+      (!lista.length && !ped.length && iso >= hoje ? '<div class="livre">livre · solte aqui</div>' : "") + "</div></div>";
+  }
+  var esq = '<div class="card fila-col"><div class="cab"><h2>Chegou, sem data</h2>' + selo(aguardando.length + "", aguardando.length ? "alerta" : "ok") + '</div><div class="corpo col" style="gap:8px">' + (aguardando.length ? aguardando.map(cartaoFila).join("") : '<div class="vazio">Nada esperando data. ' + botao("Entrou material", "p", 'data-acao="novo-fila"', "plus") + "</div>") + "</div></div>";
+  var dir = '<div class="card fila-col"><div class="cab"><h2>Programado · ' + fmtDataCurta(seg) + " a " + fmtDataCurta(dom) + '</h2><span class="row">' + botao("", "p icone", 'data-acao="fila-semana" data-v="' + ((S.filaSemana || 0) - 1) + '" aria-label="Semana anterior"', "chevron-left") + botao("Hoje", "p", 'data-acao="fila-semana" data-v="0"') + botao("", "p icone", 'data-acao="fila-semana" data-v="' + ((S.filaSemana || 0) + 1) + '" aria-label="Próxima semana"', "chevron-right") + '</span></div><div class="corpo col" style="gap:4px">' + dias + '<div class="small muted mt2">Arraste um material da esquerda para um dia. Tracejado vermelho é dia que o cliente pediu e ainda não tem programação.</div></div></div>';
+  return cab + '<div class="grid fila-grade">' + esq + dir + "</div>";
+}
+function filaTabela() {
+  var hoje = hojeISO(); var f0 = S.filtroFila || "aguardando";
+  var lista = S.d.fila.filter(function (f) { return f0 === "todos" || f.status === f0; });
+  var peso = { urgente: 0, data_pedida: 1, normal: 2 }; lista.sort(function (a, b) { return (a.status === "aguardando" ? 0 : 1) - (b.status === "aguardando" ? 0 : 1) || (peso[a.urgencia] - peso[b.urgencia]) || String(a.criadoEm).localeCompare(String(b.criadoEm)); });
+  return '<div class="chips">' + [["aguardando", "Aguardando"], ["alocado", "Programados"], ["publicado", "Publicados"], ["todos", "Tudo"]].map(function (o) { return '<button type="button" class="chip' + (f0 === o[0] ? " ativo" : "") + '" data-acao="filtro-fila" data-v="' + o[0] + '">' + o[1] + "</button>"; }).join("") + "</div>" +
+    '<div class="card"><div class="corpo sem tabela-wrap"><table class="tabela"><thead><tr><th>Material</th><th>Na fila</th><th>Data pedida</th><th>Origem</th><th>Registrou</th><th>Status</th><th></th></tr></thead><tbody>' +
+    (lista.length ? lista.map(function (f) {
+      var dias = diasEntre(f.criadoEm, hoje) || 0; var c = completude(f); var ate = f.dataPedida ? diasEntre(hoje, f.dataPedida) : null;
+      var st = f.status === "publicado" ? selo("Publicado", "ok") : f.status === "alocado" ? selo("Programado " + fmtDataCurta(f.dataAlocada), "info") : c.completo ? selo("Completo", "ok") : selo("Falta " + c.faltam.map(function (it) { return it[1].toLowerCase().split(" ")[0]; }).join(", "), "alerta");
+      return '<tr class="clicavel' + (f.status === "aguardando" && dias >= 5 ? " linha-erro" : "") + '" data-acao="editar-fila" data-id="' + attr(f.id) + '"><td><strong>' + esc(nomeMarca(f.marcaId)) + '</strong> · ' + esc(f.descricao || "") + '<div class="small muted">' + esc(PRODUTOS[f.produto].nome) + '</div></td><td class="nowrap"' + (f.status === "aguardando" && dias >= 5 ? ' style="color:var(--erro);font-weight:600"' : "") + ">" + (f.status === "aguardando" ? (dias ? dias + " dia" + (dias > 1 ? "s" : "") : "hoje") : "—") + '</td><td class="nowrap small">' + (f.dataPedida ? fmtData(f.dataPedida) + (ate != null && f.status === "aguardando" ? '<div style="color:var(--' + (ate <= 3 ? "erro" : "muted") + ')">' + (ate < 0 ? "passou há " + (-ate) + " d" : ate === 0 ? "é hoje" : "em " + ate + " d") + "</div>" : "") : '<span class="muted">—</span>') + '</td><td class="small">' + esc(ORIGENS[f.origem] || f.origem || "") + '</td><td class="small">' + esc(f.por || "") + "</td><td>" + st + '</td><td class="nowrap">' + (f.status === "aguardando" ? botao("Dar data", "p", 'data-acao="alocar-fila" data-id="' + attr(f.id) + '" onclick="event.stopPropagation()"', "calendar") : f.status === "alocado" && f.entregaId ? botao("Publicou", "p", 'data-acao="editar-entrega" data-id="' + attr(f.entregaId) + '" onclick="event.stopPropagation()"', "check") : "") + "</td></tr>";
+    }).join("") : '<tr><td colspan="7"><div class="vazio" style="margin:16px">Nada nesse filtro.</div></td></tr>') + "</tbody></table></div></div>";
 }
 
-/* ============================================================ tela: brand (kanban) */
 /* crédito: vídeo contratado que ainda não tem tema (veio da planilha como "A definir") */
 function ehCredito(b) { return b.etapa === "definir_tema" && /^(a definir|aguardando cliente|aguardando|definir|-|)$/i.test(String(b.titulo || "").trim()) && !(b.historico || []).some(function (h) { return h.texto && !/^Criado|^Exemplo/.test(h.texto); }); }
 var FASES_BRAND = [
@@ -952,18 +993,22 @@ function formEntrega(d) {
     "</div>" + peForm("Salvar entrega", e.id ? 'data-acao="apagar-entrega" data-id="' + attr(e.id) + '"' : "") + "</form>";
 }
 function formFila(d) {
-  var f = d.item || { marcaId: "", produto: "post", descricao: "", linkMaterial: "", linkDestino: "", dataPedida: "", urgencia: "normal", por: "", obs: "", status: "aguardando" };
-  return '<form class="dialogo" data-form="fila">' + cabDialogo(f.id ? "Editar item da fila" : "Entrou material", "O atendimento registra o que a marca mandou. Conteúdo dá a data depois.") + '<div class="corpo">' +
-    '<div class="grid g2">' + campo("Marca", select("marcaId", opcoesMarcas("Escolha"), f.marcaId, "required")) + campo("Produto", select("produto", ORDEM_PRODUTOS.map(function (p) { return [p, PRODUTOS[p].nome]; }), f.produto)) + "</div>" +
-    campo("O que é", input("descricao", f.descricao, "text", 'required placeholder="Ex.: carrossel capacete AGV, 5 cards + legenda"')) +
+  var f = d.item || { marcaId: d.marcaId || "", produto: d.produto || "post", descricao: "", linkMaterial: "", linkDestino: "", dataPedida: "", urgencia: "normal", por: "", obs: "", status: "aguardando", origem: "whatsapp", checklist: {} };
+  var itens = CHECKLIST[f.produto] || [];
+  return '<form class="dialogo" data-form="fila">' + cabDialogo(f.id ? "Editar item da fila" : "Entrou material", f.id ? "" : "Cole o link e descreva o que chegou. A plataforma tenta reconhecer a marca pelo texto.") + '<div class="corpo">' +
+    (f.id ? "" : '<div class="drop" style="padding:12px">' + icone("link", "ic") + ' Cole o link do Drive ou do WeTransfer no campo abaixo. Arquivo direto do Drive entra sozinho na próxima etapa (robô da pasta Comercial).</div>') +
+    campo("O que é", input("descricao", f.descricao, "text", 'required placeholder="Ex.: Honda, carrossel PCX 160, 5 cards + legenda" data-filtro="filaDescricao"'), "Escreva o nome da marca junto que ela é reconhecida") +
+    '<div class="grid g2">' + campo("Marca", select("marcaId", opcoesMarcas("Escolha"), f.marcaId, "required")) + campo("Produto", select("produto", ORDEM_PRODUTOS.map(function (p) { return [p, PRODUTOS[p].nome]; }), f.produto, 'data-filtro="filaProduto"')) + "</div>" +
     '<div class="grid g2">' + campo("Link do material (Drive, WeTransfer)", input("linkMaterial", f.linkMaterial, "url")) + campo("Link parametrizado (destino)", input("linkDestino", f.linkDestino, "url")) + "</div>" +
-    '<div class="grid g3">' + campo("Cliente pediu data?", input("dataPedida", f.dataPedida, "date")) + campo("Urgência", select("urgencia", Object.keys(URGENCIAS).map(function (k) { return [k, URGENCIAS[k]]; }), f.urgencia)) + campo("Quem registrou", input("por", f.por, "text", 'placeholder="Mariana"')) + "</div>" +
+    (itens.length ? '<div class="campo"><label>O que já veio</label><div class="checklist">' + itens.map(function (it) { return '<label class="check"><input type="checkbox" name="chk_' + it[0] + '"' + (f.checklist && f.checklist[it[0]] ? " checked" : "") + "> " + esc(it[1]) + "</label>"; }).join("") + '</div><span class="ajuda">Só o que estiver completo pode receber data sem aviso. O que faltar vira o texto de "Pedir o que falta".</span></div>' : "") +
+    '<div class="grid g4">' + campo("Cliente pediu data?", input("dataPedida", f.dataPedida, "date")) + campo("Urgência", select("urgencia", Object.keys(URGENCIAS).map(function (k) { return [k, URGENCIAS[k]]; }), f.urgencia)) + campo("Como chegou", select("origem", Object.keys(ORIGENS).map(function (k) { return [k, ORIGENS[k]]; }), f.origem || "whatsapp")) + campo("Quem registrou", input("por", f.por, "text", 'placeholder="Mariana"')) + "</div>" +
     campo("Observações", textarea("obs", f.obs)) + "</div>" + peForm(f.id ? "Salvar" : "Colocar na fila", f.id ? 'data-acao="apagar-fila" data-id="' + attr(f.id) + '"' : "") + "</form>";
 }
 function formAlocar(d) {
   var f = d.item;
   return '<form class="dialogo" data-form="alocar">' + cabDialogo("Dar data: " + nomeMarca(f.marcaId), f.descricao) + '<div class="corpo">' +
-    '<div class="grid g2">' + campo("Data de publicação", input("data", f.dataPedida || "", "date", "required")) + campo("Autorização (para contar na cota)", select("autorizacaoId", opcoesAuts(f.marcaId, "Sem autorização"), (autsDaMarca(f.marcaId).filter(function (a) { return autVigente(a); })[0] || {}).id || "")) + "</div>" +
+    (completude(f).completo ? "" : '<div class="alerta-box">' + icone("triangle-alert") + '<span class="t">Material incompleto: falta ' + esc(completude(f).faltam.map(function (it) { return it[1].toLowerCase(); }).join(", ")) + '. Dá para programar mesmo assim, mas vale pedir antes.</span></div>') +
+    '<div class="grid g2">' + campo("Data de publicação", input("data", d.dataSugerida || f.dataPedida || "", "date", "required")) + campo("Autorização (para contar na cota)", select("autorizacaoId", opcoesAuts(f.marcaId, "Sem autorização"), (autsDaMarca(f.marcaId).filter(function (a) { return autVigente(a); })[0] || {}).id || "")) + "</div>" +
     (f.produto === "post" ? campo("Rede", select("rede", Object.keys(REDES).map(function (k) { return [k, REDES[k]]; }), "instagram_facebook")) : "") +
     '<div class="small muted">Cria uma entrega programada no calendário. Quando sair, abra a entrega e marque como publicada, com o link e os números.</div></div>' + peForm("Programar") + "</form>";
 }
@@ -1072,9 +1117,9 @@ function gerarExemplos() {
   var hao = cotas("haojue", null, { post: 6, brand: 1 }, { inicio: d(-325), fim: d(40) });
   if (hao) { ent(++n, "haojue", hao, "post", d(-200), "Burgman 125", {}); ent(++n, "haojue", hao, "post", d(-100), "NK 160", {}); }
   // fila
-  fila(++n, "honda", "post", "Carrossel PCX 160, 5 cards + legenda", d(-6), { dataPedida: ds(4), urgencia: "data_pedida" });
-  fila(++n, "bmw", "email", "E-mail C400 X promoção de outubro", d(-2));
-  fila(++n, "riffel", "post", "Post relação Carbon, arte pronta", hoje, { por: "Maíra" });
+  fila(++n, "honda", "post", "Carrossel PCX 160, 5 cards + legenda", d(-6), { dataPedida: ds(4), urgencia: "data_pedida", origem: "drive", checklist: { arte: true, legenda: true, link: false } });
+  fila(++n, "bmw", "email", "E-mail C400 X promoção de outubro", d(-2), { origem: "email", checklist: { html: true, assunto: true, link: true, base: true } });
+  fila(++n, "riffel", "post", "Post relação Carbon, arte pronta", hoje, { por: "Maíra", origem: "whatsapp", checklist: { arte: true, legenda: false, link: false } });
   return ops;
 }
 function carregarExemplos() {
@@ -1145,7 +1190,9 @@ function aoSubmeter(ev) {
     return salvar("marcas", mk, "Cobrança registrada em " + fmtData(f.data || hojeISO()) + ".");
   }
   if (tipo === "fila") {
-    item.id = item.id || uid("fila"); item.marcaId = f.marcaId; item.produto = f.produto; item.descricao = f.descricao; item.linkMaterial = f.linkMaterial; item.linkDestino = f.linkDestino; item.dataPedida = f.dataPedida || null; item.urgencia = f.urgencia; item.por = f.por; item.obs = f.obs; item.status = item.status || "aguardando"; item.criadoEm = item.criadoEm || hojeISO();
+    item.id = item.id || uid("fila"); item.marcaId = f.marcaId; item.produto = f.produto; item.descricao = f.descricao; item.linkMaterial = f.linkMaterial; item.linkDestino = f.linkDestino; item.dataPedida = f.dataPedida || null; item.urgencia = f.urgencia; item.por = f.por; item.obs = f.obs; item.origem = f.origem || "outro"; item.status = item.status || "aguardando"; item.criadoEm = item.criadoEm || hojeISO();
+    item.checklist = {}; (CHECKLIST[item.produto] || []).forEach(function (it) { item.checklist[it[0]] = !!form["chk_" + it[0]] && form["chk_" + it[0]].checked; });
+    if (item.linkDestino && item.checklist.link === false && !form.chk_link.checked) item.checklist.link = true;
     return salvar("fila", item, item.status === "aguardando" ? "Material na fila." : "Salvo.");
   }
   if (tipo === "alocar") {
@@ -1180,6 +1227,9 @@ function aoClicar(ev) {
     case "seq-iniciar": return iniciarSequencia();
     case "seq-pular": { var sq = S.dialogo && S.dialogo.sequencia; if (sq) abrirSequencia(sq.ids, sq.i + 1); return; }
     case "filtro-fila": S.filtroFila = v; return render();
+    case "visao-fila": S.visaoFila = v; return render();
+    case "fila-semana": S.filaSemana = +v; return render();
+    case "fila-pedir": { var fp = byId(S.d.fila, id); var tp = textoPedirFalta(fp); var okp = function () { toast("Texto copiado. Cole no WhatsApp ou no e-mail da marca."); }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(tp).then(okp, function () { S.dialogo = { tipo: "texto", titulo: "Pedir o que falta", texto: tp }; render(); }); else { S.dialogo = { tipo: "texto", titulo: "Pedir o que falta", texto: tp }; render(); } return; }
     case "filtro-ed-status": S.filtroEdicaoStatus = v; return render();
     case "ficha-aut": S.fichaAut = id; return render();
     case "ficha-aba": S.fichaAba = v; return render();
@@ -1282,6 +1332,8 @@ function aoMudar(ev) {
     case "relAte": S.relAte = val; break;
     case "brandFormMarca": case "entregaFormMarca": { var it2 = lerFormParaItem(el.closest("form")); it2.autorizacaoId = ""; S.dialogo.item = it2; break; }
     case "entregaFormProduto": { var it3 = lerFormParaItem(el.closest("form")); S.dialogo.item = it3; break; }
+    case "filaProduto": { var it4 = lerFormParaItem(el.closest("form")); it4.checklist = {}; S.dialogo.item = it4; break; }
+    case "filaDescricao": { var fm = el.closest("form"); if (fm.marcaId.value) return; var txt = val.toLowerCase(); var achou = S.d.marcas.filter(function (m) { var n = m.nome.toLowerCase().split(/[\/(]/)[0].trim(); return n.length >= 3 && txt.indexOf(n) >= 0; })[0]; if (achou) { fm.marcaId.value = achou.id; toast("Marca reconhecida: " + achou.nome); } return; }
   }
   render();
 }
@@ -1296,8 +1348,8 @@ function reduzirImagem(file, max) {
 /* ============================================================ início */
 document.addEventListener("click", aoClicar);
 document.addEventListener("submit", aoSubmeter);
-document.addEventListener("input", function (ev) { var f = ev.target.getAttribute && ev.target.getAttribute("data-filtro"); if (f === "busca") aoMudar(ev); });
-document.addEventListener("change", function (ev) { var f = ev.target.getAttribute && (ev.target.getAttribute("data-filtro") || ev.target.getAttribute("data-acao-arquivo") || ev.target.getAttribute("data-cota-aut")); if (f && f !== "busca") aoMudar(ev); });
+document.addEventListener("input", function (ev) { var f = ev.target.getAttribute && ev.target.getAttribute("data-filtro"); if (f === "busca" || f === "filaDescricao") aoMudar(ev); });
+document.addEventListener("change", function (ev) { var f = ev.target.getAttribute && (ev.target.getAttribute("data-filtro") || ev.target.getAttribute("data-acao-arquivo") || ev.target.getAttribute("data-cota-aut")); if (f && f !== "busca" && f !== "filaDescricao") aoMudar(ev); });
 var rotaAnterior = rota().caminho;
 window.addEventListener("hashchange", function () { var agora = rota().caminho; if (agora !== rotaAnterior) S.busca = ""; rotaAnterior = agora; S.gavetaAberta = false; render(); });
 document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && S.dialogo) fechar(); });
@@ -1310,9 +1362,18 @@ document.addEventListener("paste", function (ev) {
   if (!S.dialogo || S.dialogo.tipo !== "entrega") return;
   var itens = (ev.clipboardData && ev.clipboardData.items) || []; for (var i = 0; i < itens.length; i++) { if (itens[i].kind === "file" && /^image\//.test(itens[i].type)) { if (imagemParaEntrega(itens[i].getAsFile())) { ev.preventDefault(); return; } } }
 });
-document.addEventListener("dragover", function (ev) { if (S.dialogo && S.dialogo.tipo === "entrega") { ev.preventDefault(); var z = document.querySelector(".colar-print"); if (z) z.classList.add("arrastando"); } });
+var arrastandoFila = null;
+document.addEventListener("dragstart", function (ev) { var c = ev.target.closest && ev.target.closest("[data-fila-id]"); if (c) { arrastandoFila = c.getAttribute("data-fila-id"); ev.dataTransfer.setData("text/plain", "fila:" + arrastandoFila); ev.dataTransfer.effectAllowed = "move"; c.classList.add("arrastando"); } });
+document.addEventListener("dragend", function () { arrastandoFila = null; document.querySelectorAll(".fila-card.arrastando, .prog-dia.alvo").forEach(function (e) { e.classList.remove("arrastando"); e.classList.remove("alvo"); }); });
+document.addEventListener("dragover", function (ev) {
+  if (arrastandoFila) { var dia = ev.target.closest && ev.target.closest(".prog-dia"); document.querySelectorAll(".prog-dia.alvo").forEach(function (e) { e.classList.remove("alvo"); }); if (dia && !dia.classList.contains("passado")) { ev.preventDefault(); dia.classList.add("alvo"); } return; }
+  if (S.dialogo && S.dialogo.tipo === "entrega") { ev.preventDefault(); var z = document.querySelector(".colar-print"); if (z) z.classList.add("arrastando"); }
+});
 document.addEventListener("dragleave", function () { var z = document.querySelector(".colar-print"); if (z) z.classList.remove("arrastando"); });
-document.addEventListener("drop", function (ev) { if (!S.dialogo || S.dialogo.tipo !== "entrega") return; ev.preventDefault(); var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0]; imagemParaEntrega(f); });
+document.addEventListener("drop", function (ev) {
+  if (arrastandoFila) { var dia = ev.target.closest && ev.target.closest(".prog-dia"); ev.preventDefault(); if (dia && !dia.classList.contains("passado")) { var fi = byId(S.d.fila, arrastandoFila); if (fi) { S.dialogo = { tipo: "alocar", item: clone(fi), dataSugerida: dia.getAttribute("data-dia") }; render(); } } arrastandoFila = null; return; }
+  if (!S.dialogo || S.dialogo.tipo !== "entrega") return; ev.preventDefault(); var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0]; imagemParaEntrega(f);
+});
 render();
 API = window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.projectId ? criarApiFirebase(window.FIREBASE_CONFIG) : criarApiLocal();
 API.carregar().then(function (d) {

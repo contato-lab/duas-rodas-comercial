@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 var CHAVE = "drc-tutorial-visto";
-var VERSAO_TUTORIAL = 5;
+var VERSAO_TUTORIAL = 6;
 
 /* ============================================================ passos do passeio
    rota: para onde ir antes de mostrar o passo. alvo: lista de seletores; usa o primeiro que existir e estiver visível.
@@ -33,8 +33,8 @@ var PASSOS = [
     texto: "Os contratos agrupados por situação: vencendo primeiro, depois vigentes, vencidas. Cada linha mostra entregue e contratado por produto. Os números tracejados são as cotas, editáveis direto na linha: clicou, digitou, saiu do campo, salvou. Renovar cria o contrato do ano seguinte copiando as cotas, sem carregar saldo." },
   { rota: "#/autorizacoes", alvo: ['[data-acao="seq-iniciar"]', '[data-acao="visao-aut"][data-v="tempo"]'], titulo: "Cadastrar em sequência e linha do tempo",
     texto: "Cadastrar em sequência percorre uma a uma as autorizações que vieram da planilha sem quantidades, já sugerindo a cota de brand pelo que a planilha mostra. Linha do tempo troca a tabela por barras no calendário: dá para ver renovação, sobreposição e quem está perto do fim. Nova autorização, no topo, aceita o PDF e lê Gecom, vigência, valor e cotas quando o PDF tem texto." },
-  { rota: "#/fila", alvo: ['[data-acao="novo-fila"]'], titulo: "Fila de materiais",
-    texto: "O atendimento registra aqui tudo que a marca mandou: o que é, o link do arquivo no Drive e o link parametrizado. Nada mais se perde no WhatsApp. Igor e Isa clicam em Dar data, e o material vira uma entrega programada no calendário. Quando sair, basta marcar como publicado." },
+  { rota: "#/fila", alvo: [".fila-grade"], titulo: "Fila de materiais",
+    texto: "Esquerda: o que chegou da marca e ainda não tem data, com o checklist do que veio e do que falta (arte, legenda, link). Direita: a semana programada. Arraste o material para um dia, ou clique em Dar data. Quando falta algo, Pedir o que falta copia o texto pronto para mandar à marca. Dia tracejado em vermelho é data que o cliente pediu e ainda não foi atendida." },
   { rota: "#/brand", alvo: [".funil"], titulo: "Brand: o funil",
     texto: "Quantos vídeos estão em cada fase: com o cliente, roteiro, gravação, edição e revisão, prontos para dar data. Clique numa fase para filtrar. Os créditos contratados que ainda não têm tema ficam fora do funil, agrupados em cada marca." },
   { rota: "#/brand", alvo: [".brand-card"], titulo: "Brand: um card por marca",
@@ -74,8 +74,9 @@ var GUIA = [
     "Salve. A barrinha da marca atualiza na hora." ] },
   { titulo: "Material que a marca mandou (fila)", passos: [
     "Atendimento: vá em Fila de materiais e clique em Entrou material.",
-    "Escolha a marca e o produto, descreva o material, cole o link do arquivo (Drive) e o link parametrizado. Se o cliente pediu uma data, informe. Marque a urgência.",
-    "Conteúdo (Igor e Isa): abra a fila, clique em Dar data no item, escolha a data de publicação e a autorização. Vira uma entrega programada no calendário.",
+    "Descreva o material com o nome da marca no texto (a marca é reconhecida sozinha), escolha o produto, cole o link do arquivo e o link parametrizado, marque no checklist o que já veio, diga como chegou e se o cliente pediu data.",
+    "Se faltar algo, o item mostra o que falta e o botão Pedir o que falta copia a mensagem pronta para mandar à marca.",
+    "Conteúdo (Igor e Isa): arraste o material para um dia da semana à direita, ou clique em Dar data. Vira uma entrega programada no calendário.",
     "Quando o material sair, abra a entrega (pelo calendário ou pela ficha da marca), mude para Publicado e cole o link e os números." ] },
   { titulo: "Acompanhar um vídeo de brand", passos: [
     "Vá em Brand. Cada card é uma marca; dentro estão os vídeos e a etapa de cada um.",
