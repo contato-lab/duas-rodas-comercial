@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 var CHAVE = "drc-tutorial-visto";
-var VERSAO_TUTORIAL = 8;
+var VERSAO_TUTORIAL = 9;
 
 /* ============================================================ passos do passeio
    rota: para onde ir antes de mostrar o passo. alvo: lista de seletores; usa o primeiro que existir e estiver visível.
@@ -92,6 +92,10 @@ var GUIA = [
     "Para incluir um vídeo novo, clique em Novo material e, se for branded, escolha o vídeo de brand correspondente: assim as duas telas andam juntas.",
     "Na visão Tabela dá para corrigir status e datas direto na linha e registrar rodadas antigas com o botão +.",
     "Cole o link de exibição (YouTube não listado) para o cliente aprovar e o link do material no Drive." ] },
+  { titulo: "Números do YouTube sem digitar", passos: [
+    "Na ficha do vídeo de brand, preencha o campo Vídeo final (YouTube) com o link público ou não listado.",
+    "Os números (visualizações, curtidas e comentários) entram sozinhos quando alguém abre Relatórios daquela marca, e também pelo botão Números do YouTube no menu Brand.",
+    "No relatório, a tela de cada branded já sai com esses números. Se preferir outro valor, cadastre uma entrega de brand com os números à mão, que ela tem prioridade." ] },
   { titulo: "Gerar o relatório de um cliente", passos: [
     "Vá em Relatórios. Escolha a marca e a autorização. Se quiser só um mês, preencha o período.",
     "Confira a lista do que vai entrar e clique em Gerar relatório. Ele abre em uma aba nova.",

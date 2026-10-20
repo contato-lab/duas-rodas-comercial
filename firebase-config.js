@@ -10,3 +10,8 @@ window.FIREBASE_CONFIG = {
   messagingSenderId: "742696232796",
   appId: "1:742696232796:web:e11f03c92fda3fa14b8399"
 };
+
+// Chave da YouTube Data API v3 (mesmo projeto Google Cloud), restrita ao endereço do site.
+// Serve só para LER visualizações, curtidas e comentários de vídeos públicos ou não listados.
+// Enquanto for null, os números do YouTube ficam para digitar à mão.
+window.YOUTUBE_KEY = "AIzaSyB5E_FvsTnVvqn5vfwTFLG0HC1q-zclll8";

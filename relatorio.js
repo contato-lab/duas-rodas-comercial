@@ -59,8 +59,8 @@ function slidePost(d, e) {
 }
 function slideBrand(d, b) {
   var yt = youtubeId(b.links && b.links.youtube); var ent = d.entregas.filter(function (e) { return e.produto === "brand" && (e.link === (b.links || {}).youtube || e.titulo === b.titulo); })[0];
-  var m = (ent && ent.metricas) || {}; var linhas = [];
-  if (m.visualizacoes != null) linhas.push(fmtNum(m.visualizacoes) + " VISUALIZAÇÕES"); if (m.curtidas != null) linhas.push(fmtNum(m.curtidas) + " CURTIDAS");
+  var m = (ent && ent.metricas && ent.metricas.visualizacoes != null) ? ent.metricas : (b.youtube || (ent && ent.metricas) || {}); var linhas = [];
+  if (m.visualizacoes != null) linhas.push(fmtNum(m.visualizacoes) + " VISUALIZAÇÕES"); if (m.curtidas != null) linhas.push(fmtNum(m.curtidas) + " CURTIDAS"); if (m.comentarios != null && m.comentarios > 0) linhas.push(fmtNum(m.comentarios) + " COMENTÁRIOS");
   var img = ent && ent.imagem ? '<div class="print"><img src="' + esc(ent.imagem) + '" alt=""></div>' : (yt ? '<div class="print"><img src="https://img.youtube.com/vi/' + yt + '/maxresdefault.jpg" onerror="this.src=\'https://img.youtube.com/vi/' + yt + '/hqdefault.jpg\'" alt=""></div>' : '<div class="print vazio"><span>Thumb do vídeo</span></div>');
   return { descricao: "Branded: " + b.titulo + (b.dataVeiculacao ? " (" + fmtData(b.dataVeiculacao) + ")" : ""), html: '<section class="slide item">' + faixaTitulo(d.marca.nome, "BRANDED", "", b.dataVeiculacao) +
     '<div class="corpo">' + img + '<div class="metricas">' + caixaMetrica("ALCANCE", linhas.length ? linhas : ["VEICULADO NO YOUTUBE", b.apresentador ? "COM " + b.apresentador.toUpperCase() : ""]) + "</div></div>" +
