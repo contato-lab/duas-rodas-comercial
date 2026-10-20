@@ -24,8 +24,10 @@ if (credenciais) {
   admin.initializeApp({ credential: admin.credential.cert(credenciais), projectId: credenciais.project_id });
   auth = new google.auth.GoogleAuth({ credentials: credenciais, scopes: ESCOPOS });
 } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-  admin.initializeApp({ credential: admin.credential.applicationDefault(), projectId: PROJETO });
+  // o firebase-admin não lê o arquivo de identidade federada; a googleapis lê, então o admin pega o token emprestado dela
   auth = new google.auth.GoogleAuth({ scopes: ESCOPOS });
+  const credencialAdmin = { getAccessToken: async () => { const cliente = await auth.getClient(); const r = await cliente.getAccessToken(); const exp = cliente.credentials && cliente.credentials.expiry_date ? Math.max(60, Math.floor((cliente.credentials.expiry_date - Date.now()) / 1000)) : 3000; return { access_token: typeof r === "string" ? r : r.token, expires_in: exp }; } };
+  admin.initializeApp({ credential: credencialAdmin, projectId: PROJETO });
 } else { console.error("Sem credencial: configure a identidade do GitHub (workflow) ou o segredo GOOGLE_SERVICE_ACCOUNT."); process.exit(1); }
 const db = admin.firestore();
 const drive = google.drive({ version: "v3", auth });
