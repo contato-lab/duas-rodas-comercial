@@ -1,21 +1,17 @@
 name: Robô do Drive
 
-
 on:
   schedule:
-    - cron: "0 * * * *"→ Runs every hour   # de hora em hora (UTC)
+    - cron: "0 * * * *"   # de hora em hora (UTC)
   workflow_dispatch: {}
-
 
 concurrency:
   group: robo-drive
   cancel-in-progress: false
 
-
 permissions:
   id-token: write
   contents: read
-
 
 jobs:
   varrer:
@@ -40,4 +36,3 @@ jobs:
           GOOGLE_CLOUD_PROJECT: comercial-duas-rodas
           DRIVE_PASTA_ID: ${{ vars.DRIVE_PASTA_ID }}
           DIAS_INICIAIS: ${{ vars.DIAS_INICIAIS }}
-
