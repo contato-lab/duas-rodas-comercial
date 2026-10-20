@@ -57,8 +57,21 @@ Como ele entra no Google, sem chave nenhuma: a organização da conta proíbe ch
 
 Para rodar na hora, sem esperar a hora cheia: Actions, "Robô do Drive", Run workflow. O estado de cada rodada fica em `robo/drive` no Firestore; a plataforma mostra em Ajustes o último arquivo lançado. Aviso do GitHub: agendamento em repositório sem commit por 60 dias é pausado; basta reativar em Actions.
 
+## Robô do Meta (Instagram e Facebook)
+
+Arquivos: `robo-meta.js` e `.github/workflows/robo-meta.yml` (todo dia às 06h30 de Brasília, e sob demanda em Actions). Para cada entrega do tipo post com link do Instagram ou do Facebook da revista, o robô lê alcance, curtidas, comentários, salvamentos, compartilhamentos e visualizações pela Graph API e grava em `entrega.metricas` (com `metaEm` e `fonte`). Post dos últimos 7 dias é relido todo dia; depois, uma vez por semana. Post que não está na conta da revista ganha o aviso `metaAviso` na entrega. Estado da rodada em `robo/meta` no Firestore.
+
+Como a API do Instagram não busca por link, o robô lista as mídias da conta e casa pelo código do link (`/p/CODIGO/` ou `/reel/CODIGO/`). No Facebook, lista os posts da página e casa pela URL.
+
+Para ligar (só uma vez, no Gerenciador de Negócios do portfólio **Duas Rodas**, id 1930844820498404):
+
+1. Apps: criar um app em developers.facebook.com (tipo Empresa), ligado ao portfólio Duas Rodas.
+2. Usuários do sistema: criar um usuário do sistema (ex.: `robo-plataforma`), atribuir a ele a página da revista e a conta @duasrodasbr com permissão de Insights.
+3. Gerar token desse usuário do sistema para o app, com as permissões `instagram_basic`, `instagram_manage_insights`, `pages_read_engagement`, `pages_show_list`, `read_insights`, validade "nunca expira".
+4. No GitHub, Settings, Secrets and variables, Actions: segredo **META_TOKEN** com o token. (Opcional) variável **META_PAGINA_ID** com o id da página; sem ela o robô usa a primeira página com Instagram ligado que o token enxergar.
+5. Actions, "Robô do Meta", Run workflow.
+
 ## Próximas etapas combinadas
 
-- Puxar resultados do Instagram e do Facebook pelo link (API do perfil da revista), para o relatório sair sem digitar número.
 - E-mail marketing pela API da Dinamize, se o plano tiver API.
 - Níveis de acesso, quando o time decidir que precisa.
