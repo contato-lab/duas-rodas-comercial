@@ -833,22 +833,55 @@ function telaEdicao() {
     '<div class="indicador' + (risco.length ? " destaque" : "") + '"><span class="valor">' + risco.length + '</span><span class="rot">Vai ao ar em 7 dias e não está pronto</span>' + (risco.length ? '<div class="small mt1">' + risco.slice(0, 3).map(function (b) { return '<a href="#" data-acao="abrir-brand" data-id="' + attr(b.id) + '">' + esc(nomeMarca(b.marcaId)) + " · " + esc(b.titulo) + " (" + fmtDataCurta(b.dataVeiculacao) + ")</a>"; }).join("<br>") + "</div>" : "") + "</div>" +
     '<div class="indicador"><span class="rot" style="margin-top:0">Idas e voltas (rodadas de revisão)</span><div class="refas"><div><i style="height:' + Math.round(r1 / mx * 40 + 4) + 'px;background:var(--ok)"></i><span>1 · ' + r1 + "</span></div><div><i style=\"height:" + Math.round(r2 / mx * 40 + 4) + 'px;background:var(--alerta)"></i><span>2 · ' + r2 + "</span></div><div><i style=\"height:" + Math.round(r3 / mx * 40 + 4) + 'px;background:var(--erro)"></i><span>3 ou mais · ' + r3 + "</span></div></div></div></div>";
   if (S.visaoEdicao === "tabela") return topo + kpis + edicaoTabela(todos);
-  // fila priorizada: data de veiculação do brand ligado, depois branded, depois quem espera há mais tempo
-  var paraEditar = naFila.concat(emEdicao).sort(function (a, b) {
+  // fila priorizada: data de veiculação do brand ligado, depois quem já está editando, depois branded, depois quem espera há mais tempo
+  var paraEditar = naFila.slice().sort(function (a, b) {
     var ba = brandLigado(a), bb = brandLigado(b); var da = ba && ba.dataVeiculacao && ba.etapa !== "veiculado" ? ba.dataVeiculacao : "9999", db = bb && bb.dataVeiculacao && bb.etapa !== "veiculado" ? bb.dataVeiculacao : "9999";
     if (da !== db) return da.localeCompare(db);
-    var ea = a.status === "Edição" ? 0 : 1, eb = b.status === "Edição" ? 0 : 1; if (ea !== eb) return ea - eb;
     var ta = a.tipo === "Branded" ? 0 : 1, tb = b.tipo === "Branded" ? 0 : 1; if (ta !== tb) return ta - tb;
     var pa = a.status === "Próximo" ? 0 : 1, pb = b.status === "Próximo" ? 0 : 1; if (pa !== pb) return pa - pb;
     return String(a.criadoEm || a.inicio || "9").localeCompare(String(b.criadoEm || b.inicio || "9"));
   });
-  var voltou = emEdicao.filter(function (e) { return (e.ajustes || []).length; });
-  var esq = '<div class="card ed-fila"><div class="cab"><h2>Para editar, nesta ordem</h2>' + selo(paraEditar.length + "", paraEditar.length ? "info" : "ok") + '</div><div class="corpo sem">' + (paraEditar.length ? '<div class="ed-lista">' + paraEditar.map(function (e, i) { return linhaEdicao(e, i + 1, e.status === "Edição" ? [{ status: "Revisão", rotulo: "Finalizado, para revisão", icone: "check", prim: true }] : [{ status: "Edição", rotulo: "Começar", icone: "arrow-right" }]); }).join("") + "</div>" : '<div class="vazio" style="margin:16px">Nada para editar agora.</div>') + "</div></div>";
-  var dir = '<div class="col" style="gap:12px">' +
-    '<div class="card"><div class="cab"><h3>Voltou com ajuste</h3>' + selo(voltou.length + "", voltou.length ? "alerta" : "") + '</div><div class="corpo sem">' + (voltou.length ? '<div class="ed-lista">' + voltou.map(function (e) { return linhaEdicao(e, 0, [{ status: "Revisão", rotulo: "Ajustado, para revisão", icone: "check" }], true); }).join("") + "</div>" : '<div class="small muted" style="padding:12px 16px">Nenhum ajuste pendente.</div>') + "</div></div>" +
-    '<div class="card"><div class="cab"><h3>Esperando resposta</h3>' + selo(esperando.length + "") + '</div><div class="corpo sem">' + (esperando.length ? '<div class="ed-lista">' + esperando.sort(function (a, b) { return (a.status === "Revisão" ? 0 : 1) - (b.status === "Revisão" ? 0 : 1); }).map(function (e) { return linhaEdicao(e, 0, e.status === "Revisão" ? [{ status: "Edição", rotulo: "Pediu ajuste", icone: "arrow-left", extra: "ajuste" }, { status: "Aprovação", rotulo: "Ok, ao cliente", icone: "arrow-right" }] : [{ status: "Edição", rotulo: "Pediu ajuste", icone: "arrow-left", extra: "ajuste" }, { status: "Aprovado", rotulo: "Aprovou", icone: "check", prim: true }], true); }).join("") + "</div>" : '<div class="small muted" style="padding:12px 16px">Nada esperando revisão ou aprovação.</div>') + "</div></div>" +
-    '<div class="card"><div class="cab"><h3>Prontos para publicar</h3>' + selo(prontos.length + "", prontos.length ? "ok" : "") + '</div><div class="corpo sem">' + (prontos.length ? '<div class="ed-lista">' + prontos.map(function (e) { return linhaEdicao(e, 0, [{ status: "Publicado", rotulo: "Publicado", icone: "check", prim: true }], true); }).join("") + "</div>" : '<div class="small muted" style="padding:12px 16px">Nenhum aprovado aguardando publicação.</div>') + "</div></div></div>";
-  return topo + kpis + '<div class="grid ed-grade">' + esq + dir + "</div>";
+  esperando.sort(function (a, b) { return (a.status === "Revisão" ? 0 : 1) - (b.status === "Revisão" ? 0 : 1) || String(ultimaData(a) || "").localeCompare(String(ultimaData(b) || "")); });
+  prontos.sort(function (a, b) { return String(ultimaData(b) || "").localeCompare(String(ultimaData(a) || "")); });
+  var maxProntos = S.verTodosProntos ? prontos.length : 8;
+  var colunas = [
+    { id: "fila", nome: "Na fila do New", lista: paraEditar, vazio: "Nada na fila." },
+    { id: "edicao", nome: "Editando", lista: emEdicao, vazio: "Arraste um material pra cá quando começar.", destaque: true },
+    { id: "espera", nome: "Esperando resposta", lista: esperando, vazio: "Nada com o Leandro ou com o cliente." },
+    { id: "pronto", nome: "Prontos para publicar", lista: prontos.slice(0, maxProntos), total: prontos.length, vazio: "Nenhum aprovado aguardando publicação." }
+  ];
+  return topo + kpis + '<div class="kb ed-fila">' + colunas.map(function (c) {
+    return '<div class="kb-col' + (c.destaque ? " destaque" : "") + '" data-kb="' + c.id + '"><div class="kb-cab"><span>' + esc(c.nome) + '</span><span class="kb-n">' + (c.total != null ? c.total : c.lista.length) + "</span></div>" +
+      (c.lista.length ? c.lista.map(function (e, i) { return cartaoEdicao(e, c.id === "fila" ? i + 1 : 0); }).join("") : '<div class="kb-vazio">' + esc(c.vazio) + "</div>") +
+      (c.total != null && c.total > c.lista.length ? '<button type="button" class="btn p fantasma kb-mais" data-acao="ed-ver-prontos">Ver os ' + c.total + "</button>" : "") + "</div>";
+  }).join("") + "</div>";
+}
+function ultimaData(e) { var l = []; if (e.inicio) l.push(e.inicio); if (e.finalizado) l.push(e.finalizado); (e.revisoes || []).forEach(function (d) { l.push(d); }); (e.ajustes || []).forEach(function (d) { l.push(d); }); l.sort(); return l[l.length - 1] || e.criadoEm || null; }
+function botoesEdicao(e) {
+  if (e.status === "Fila" || e.status === "Próximo") return [{ status: "Edição", rotulo: "Começar", icone: "arrow-right", prim: true }];
+  if (e.status === "Edição") return [{ status: "Revisão", rotulo: (e.ajustes || []).length ? "Ajustado, para revisão" : "Finalizado, para revisão", icone: "check", prim: true }];
+  if (e.status === "Revisão") return [{ status: "Edição", rotulo: "Pediu ajuste", icone: "arrow-left", extra: "ajuste", so_icone: true }, { status: "Aprovação", rotulo: "Ok, ao cliente", icone: "arrow-right", prim: true }];
+  if (e.status === "Aprovação") return [{ status: "Edição", rotulo: "Pediu ajuste", icone: "arrow-left", extra: "ajuste", so_icone: true }, { status: "Aprovado", rotulo: "Aprovou", icone: "check", prim: true }];
+  if (e.status === "Aprovado") return [{ status: "Publicado", rotulo: "Publicado", icone: "check", prim: true }];
+  return [];
+}
+function cartaoEdicao(e, n) {
+  var ctx = contextoEdicao(e); var b = brandLigado(e); var voltou = e.status === "Edição" && (e.ajustes || []).length;
+  var principal = ctx.filter(function (c) { return c.cls !== "muted"; })[0] || ctx[0];
+  var meta = [e.tipo === "Branded" ? "branded" : "editorial"]; if (principal) meta.push(principal.t); else if (b) meta.push("Brand: " + ((byId(ETAPAS_BRAND, b.etapa) || {}).nome || "")); else if (e.tipo === "Branded") meta.push("sem vídeo ligado");
+  return '<div class="kb-card' + (voltou ? " voltou" : "") + (principal && principal.cls === "erro" ? " erro" : "") + '" draggable="true" data-ed-card="' + attr(e.id) + '" data-acao="editar-edicao" data-id="' + attr(e.id) + '" title="Arraste para outra coluna ou clique para editar">' +
+    '<div class="kb-marca">' + (n ? '<span class="kb-ordem">' + n + "</span>" : "") + '<strong>' + esc(e.marcaId ? nomeMarca(e.marcaId) : "Duas Rodas") + "</strong></div>" +
+    '<div class="kb-mat">' + esc(e.material) + "</div>" +
+    '<div class="kb-meta' + (principal ? " " + principal.cls : "") + '">' + (voltou ? '<span class="kb-selo">voltou com ajuste</span> ' : "") + esc(meta.join(" · ")) + "</div>" +
+    '<div class="kb-acoes">' + (e.linkMaterial ? '<a href="' + attr(e.linkMaterial) + '" target="_blank" rel="noopener" class="btn p icone fantasma" title="Material no Drive">' + icone("folder") + "</a>" : "") + (e.linkExibicao ? '<a href="' + attr(e.linkExibicao) + '" target="_blank" rel="noopener" class="btn p icone fantasma" title="Vídeo não listado">' + icone("external-link") + "</a>" : "") +
+    botoesEdicao(e).map(function (bt) { return '<button type="button" class="btn p' + (bt.prim ? " prim" : "") + (bt.so_icone ? " icone" : "") + '" data-acao="ed-status" data-id="' + attr(e.id) + '" data-v="' + bt.status + '"' + (bt.extra ? ' data-extra="' + bt.extra + '"' : "") + ' title="' + attr(bt.rotulo) + '">' + icone(bt.icone || "arrow-right") + (bt.so_icone ? "" : esc(bt.rotulo)) + "</button>"; }).join("") + "</div></div>";
+}
+function statusDaColuna(e, col) {
+  if (col === "fila") return { novo: "Fila" };
+  if (col === "edicao") return { novo: "Edição", extra: (e.status === "Revisão" || e.status === "Aprovação") ? "ajuste" : null };
+  if (col === "espera") return { novo: e.status === "Revisão" ? "Aprovação" : "Revisão" };
+  if (col === "pronto") return { novo: "Aprovado" };
+  return null;
 }
 function edicaoTabela(todos) {
   var f = S.filtroEdicaoStatus || "andamento";
@@ -1318,6 +1351,7 @@ function aoClicar(ev) {
     case "filtro-ed-status": S.filtroEdicaoStatus = v; return render();
     case "visao-edicao": S.visaoEdicao = v; return render();
     case "ed-status": return statusEdicao(byId(S.d.edicao, id), v, el.getAttribute("data-extra"));
+    case "ed-ver-prontos": S.verTodosProntos = true; return render();
     case "ed-rodada": { var er = clone(byId(S.d.edicao, id)); er[v] = er[v] || []; er[v].push(hojeISO()); if (v === "ajustes" && er.brandId) { var bl = byId(S.d.brands, er.brandId); } return API.salvar("edicao", er).then(function () { return sincronizarBrandDaEdicao(er); }).then(function () { toast("Rodada registrada em " + fmtData(hojeISO()) + "."); render(); }); }
     case "ficha-aut": S.fichaAut = id; return render();
     case "ficha-aba": S.fichaAba = v; return render();
@@ -1453,15 +1487,18 @@ document.addEventListener("paste", function (ev) {
   if (!S.dialogo || S.dialogo.tipo !== "entrega") return;
   var itens = (ev.clipboardData && ev.clipboardData.items) || []; for (var i = 0; i < itens.length; i++) { if (itens[i].kind === "file" && /^image\//.test(itens[i].type)) { if (imagemParaEntrega(itens[i].getAsFile())) { ev.preventDefault(); return; } } }
 });
-var arrastandoFila = null;
-document.addEventListener("dragstart", function (ev) { var c = ev.target.closest && ev.target.closest("[data-fila-id]"); if (c) { arrastandoFila = c.getAttribute("data-fila-id"); ev.dataTransfer.setData("text/plain", "fila:" + arrastandoFila); ev.dataTransfer.effectAllowed = "move"; c.classList.add("arrastando"); } });
-document.addEventListener("dragend", function () { arrastandoFila = null; document.querySelectorAll(".fila-card.arrastando, .prog-dia.alvo").forEach(function (e) { e.classList.remove("arrastando"); e.classList.remove("alvo"); }); });
+var arrastandoFila = null, arrastandoEd = null;
+document.addEventListener("dragstart", function (ev) { var ce = ev.target.closest && ev.target.closest("[data-ed-card]"); if (ce) { arrastandoEd = ce.getAttribute("data-ed-card"); ev.dataTransfer.setData("text/plain", "ed:" + arrastandoEd); ev.dataTransfer.effectAllowed = "move"; ce.classList.add("arrastando"); return; }
+  var c = ev.target.closest && ev.target.closest("[data-fila-id]"); if (c) { arrastandoFila = c.getAttribute("data-fila-id"); ev.dataTransfer.setData("text/plain", "fila:" + arrastandoFila); ev.dataTransfer.effectAllowed = "move"; c.classList.add("arrastando"); } });
+document.addEventListener("dragend", function () { arrastandoFila = null; arrastandoEd = null; document.querySelectorAll(".fila-card.arrastando, .prog-dia.alvo, .kb-card.arrastando, .kb-col.alvo").forEach(function (e) { e.classList.remove("arrastando"); e.classList.remove("alvo"); }); });
 document.addEventListener("dragover", function (ev) {
+  if (arrastandoEd) { var col = ev.target.closest && ev.target.closest(".kb-col"); document.querySelectorAll(".kb-col.alvo").forEach(function (e) { e.classList.remove("alvo"); }); if (col) { ev.preventDefault(); col.classList.add("alvo"); } return; }
   if (arrastandoFila) { var dia = ev.target.closest && ev.target.closest(".prog-dia"); document.querySelectorAll(".prog-dia.alvo").forEach(function (e) { e.classList.remove("alvo"); }); if (dia && !dia.classList.contains("passado")) { ev.preventDefault(); dia.classList.add("alvo"); } return; }
   if (S.dialogo && S.dialogo.tipo === "entrega") { ev.preventDefault(); var z = document.querySelector(".colar-print"); if (z) z.classList.add("arrastando"); }
 });
 document.addEventListener("dragleave", function () { var z = document.querySelector(".colar-print"); if (z) z.classList.remove("arrastando"); });
 document.addEventListener("drop", function (ev) {
+  if (arrastandoEd) { var colE = ev.target.closest && ev.target.closest(".kb-col"); ev.preventDefault(); var ed = byId(S.d.edicao, arrastandoEd); arrastandoEd = null; document.querySelectorAll(".kb-col.alvo").forEach(function (e) { e.classList.remove("alvo"); }); if (colE && ed) { var alvo = statusDaColuna(ed, colE.getAttribute("data-kb")); if (alvo && alvo.novo !== ed.status) statusEdicao(ed, alvo.novo, alvo.extra); } return; }
   if (arrastandoFila) { var dia = ev.target.closest && ev.target.closest(".prog-dia"); ev.preventDefault(); if (dia && !dia.classList.contains("passado")) { var fi = byId(S.d.fila, arrastandoFila); if (fi) { S.dialogo = { tipo: "alocar", item: clone(fi), dataSugerida: dia.getAttribute("data-dia") }; render(); } } arrastandoFila = null; return; }
   if (!S.dialogo || S.dialogo.tipo !== "entrega") return; ev.preventDefault(); var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0]; imagemParaEntrega(f);
 });
