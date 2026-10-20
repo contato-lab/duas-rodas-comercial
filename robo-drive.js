@@ -4,7 +4,7 @@
 //
 // Precisa de:
 //   Identidade: o workflow se autentica no Google sem chave (Workload Identity Federation) como a conta
-//                           firebase-adminsdk-fbsvc@comercial-duas-rodas.iam.gserviceaccount.com.
+//                           firebase-adminsdk-fbsvc@comercial-duas-rodas-lime.iam.gserviceaccount.com.
 //                           A pasta Comercial tem que estar compartilhada com esse e-mail (leitor).
 //   DRIVE_PASTA_ID          (opcional) id da pasta Comercial. Sem ele, o robô procura uma pasta chamada
 //                           "Comercial" entre as compartilhadas com a conta.
@@ -16,7 +16,7 @@ const { Firestore } = require("@google-cloud/firestore");
 // Dois jeitos de se identificar: (a) sem chave, pelo GitHub (Workload Identity Federation, configurado em
 // .github/workflows/robo-drive.yml, que deixa as credenciais em GOOGLE_APPLICATION_CREDENTIALS); (b) com o JSON
 // de uma conta de serviço no segredo GOOGLE_SERVICE_ACCOUNT, se um dia a organização liberar chaves.
-const PROJETO = process.env.GOOGLE_CLOUD_PROJECT || "comercial-duas-rodas";
+const PROJETO = process.env.GOOGLE_CLOUD_PROJECT || "comercial-duas-rodas-lime";
 const credenciais = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT || "null");
 const ESCOPOS = ["https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/datastore", "https://www.googleapis.com/auth/cloud-platform"];
 let auth, db;

@@ -23,9 +23,11 @@ Para atualizar: subir o arquivo alterado de novo pelo upload, que substitui o an
 
 ## Dados compartilhados (Firebase)
 
-Feito em 19/10/2026. Projeto `comercial-duas-rodas` na conta Agência UnderClick (mesma dos projetos do festival), Firestore em `southamerica-east1`, login anônimo ligado, domínio `contato-lab.github.io` autorizado. A configuração está em `firebase-config.js`. Na primeira abertura com o Firestore vazio, a plataforma carregou sozinha os dados das planilhas.
+Desde 20/10/2026 (noite) o projeto é **`comercial-duas-rodas-lime`**, na conta **performance@limeag.com** (organização limeag.com), plano **Blaze** na conta de faturamento "Minha conta de faturamento" (`012838-4D0F3E-9FEC07`), a mesma do festival-interlagos-2026, com crédito do Google Cloud. Firestore em `southamerica-east1`, login anônimo ligado, domínio `contato-lab.github.io` autorizado, número do projeto `838601584480`. A configuração está em `firebase-config.js`. Na primeira abertura com o Firestore vazio, a plataforma carregou sozinha os dados das planilhas.
 
-Regras publicadas (o botão Publicar do console não aparecia, então foram publicadas pelo Cloud Shell com `firebase deploy --only firestore:rules`):
+O projeto anterior, `comercial-duas-rodas` (conta Agência, plano grátis), estourou a cota de leituras do dia 20/10 e ficou de backup; não recebe mais nada.
+
+Regras publicadas pelo Cloud Shell da conta Lime (pasta `~/dr2`, `firebase deploy --only firestore:rules`):
 
 ```
 rules_version = '2';
@@ -33,17 +35,17 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /{colecao}/{doc} {
       allow read, write: if request.auth != null
-        && colecao in ['marcas','autorizacoes','brands','entregas','fila','edicao'];
+        && colecao in ['marcas','autorizacoes','brands','entregas','fila','edicao','robo'];
     }
   }
 }
 ```
 
-Para mudar as regras de novo: abrir https://shell.cloud.google.com com a conta, pasta `~/dr`, editar `firestore.rules` e rodar o mesmo comando.
+Para mudar as regras: abrir https://shell.cloud.google.com com a conta performance@limeag.com, pasta `~/dr2`, editar `firestore.rules` e rodar o mesmo comando.
 
 ## YouTube (feito em 20/10/2026)
 
-Visualizações, curtidas e comentários dos vídeos de brand entram pelo link do campo Vídeo final (YouTube). A chave está em `firebase-config.js` (`window.YOUTUBE_KEY`), criada no Google Cloud do projeto `comercial-duas-rodas` com o nome "YouTube Comercial Duas Rodas", restrita só à YouTube Data API v3 e aos sites `https://contato-lab.github.io/*` e `http://localhost:8765/*`. Por isso ela pode ficar no código: fora desses endereços e dessa API ela não serve para nada. Os números ficam gravados no vídeo (`brand.youtube`) e atualizam sozinhos ao abrir Relatórios da marca, ou pelo botão Números do YouTube no menu Brand. Cota da API: 10.000 unidades por dia, cada consulta de até 50 vídeos gasta 1.
+Visualizações, curtidas e comentários dos vídeos de brand entram pelo link do campo Vídeo final (YouTube). A chave está em `firebase-config.js` (`window.YOUTUBE_KEY`), criada no Google Cloud do projeto `comercial-duas-rodas-lime` com o nome "YouTube Comercial Duas Rodas" (pelo Cloud Shell, `gcloud services api-keys create`), restrita só à YouTube Data API v3 e aos sites `https://contato-lab.github.io/*` e `http://localhost:8765/*`. Por isso ela pode ficar no código: fora desses endereços e dessa API ela não serve para nada. Os números ficam gravados no vídeo (`brand.youtube`) e atualizam sozinhos ao abrir Relatórios da marca, ou pelo botão Números do YouTube no menu Brand. Cota da API: 10.000 unidades por dia, cada consulta de até 50 vídeos gasta 1.
 
 ## Robô do Google Drive (ligado em 20/10/2026)
 
@@ -51,7 +53,7 @@ Arquivos: `robo-drive.js` (o robô) e `.github/workflows/robo-drive.yml` (o agen
 
 Se a pasta de uma marca tiver outro nome, preencher o campo **Pasta no Drive** na ficha da marca. Arquivo em pasta não reconhecida entra na fila sem marca, com aviso para escolher. Na primeira rodada o robô só olha arquivos alterados nos últimos 30 dias (variável `DIAS_INICIAIS` muda isso).
 
-Como ele entra no Google, sem chave nenhuma: a organização da conta proíbe chaves de conta de serviço, então o GitHub se identifica direto no Google Cloud (Workload Identity Federation). No projeto `comercial-duas-rodas` existe o pool `github` com o provedor `github`, aceitando só o repositório `contato-lab/duas-rodas-comercial`, e esse repositório pode agir como a conta `firebase-adminsdk-fbsvc@comercial-duas-rodas.iam.gserviceaccount.com` (que já tem Firestore). A pasta MATERIAIS está compartilhada com esse e-mail como leitor. Foi feito pelo Cloud Shell com `gcloud iam workload-identity-pools create`, `providers create-oidc` e `service-accounts add-iam-policy-binding`. APIs ativadas: Drive, IAM Credentials, STS.
+Como ele entra no Google, sem chave nenhuma: a organização da conta proíbe chaves de conta de serviço, então o GitHub se identifica direto no Google Cloud (Workload Identity Federation). No projeto `comercial-duas-rodas-lime` (número 838601584480) existe o pool `github` com o provedor `github`, aceitando só o repositório `contato-lab/duas-rodas-comercial`, e esse repositório pode agir como a conta `firebase-adminsdk-fbsvc@comercial-duas-rodas-lime.iam.gserviceaccount.com` (que já tem Firestore). A pasta MATERIAIS está compartilhada com esse e-mail como leitor. Foi feito pelo Cloud Shell com `gcloud iam workload-identity-pools create`, `providers create-oidc` e `service-accounts add-iam-policy-binding`. APIs ativadas: Drive, IAM Credentials, STS.
 
 Para rodar na hora, sem esperar a hora cheia: Actions, "Robô do Drive", Run workflow. O estado de cada rodada fica em `robo/drive` no Firestore; a plataforma mostra em Ajustes o último arquivo lançado. Aviso do GitHub: agendamento em repositório sem commit por 60 dias é pausado; basta reativar em Actions.
 
