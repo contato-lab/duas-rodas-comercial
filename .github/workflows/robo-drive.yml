@@ -22,9 +22,9 @@ jobs:
       - name: Entrar no Google sem chave (identidade do GitHub)
         uses: google-github-actions/auth@v2
         with:
-          project_id: comercial-duas-rodas
-          workload_identity_provider: projects/742696232796/locations/global/workloadIdentityPools/github/providers/github
-          service_account: firebase-adminsdk-fbsvc@comercial-duas-rodas.iam.gserviceaccount.com
+          project_id: comercial-duas-rodas-lime
+          workload_identity_provider: projects/838601584480/locations/global/workloadIdentityPools/github/providers/github
+          service_account: firebase-adminsdk-fbsvc@comercial-duas-rodas-lime.iam.gserviceaccount.com
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -33,6 +33,6 @@ jobs:
       - name: Varrer a pasta Comercial e lançar na fila
         run: node robo-drive.js
         env:
-          GOOGLE_CLOUD_PROJECT: comercial-duas-rodas
+          GOOGLE_CLOUD_PROJECT: comercial-duas-rodas-lime
           DRIVE_PASTA_ID: ${{ vars.DRIVE_PASTA_ID }}
           DIAS_INICIAIS: ${{ vars.DIAS_INICIAIS }}
