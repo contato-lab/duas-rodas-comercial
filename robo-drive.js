@@ -11,7 +11,7 @@
 //   DIAS_INICIAIS           (opcional) na primeira rodada, só olha arquivos alterados nos últimos N dias (padrão 30).
 
 const { google } = require("googleapis");
-const admin = require("firebase-admin");
+const { Firestore } = require("@google-cloud/firestore");
 
 // Dois jeitos de se identificar: (a) sem chave, pelo GitHub (Workload Identity Federation, configurado em
 // .github/workflows/robo-drive.yml, que deixa as credenciais em GOOGLE_APPLICATION_CREDENTIALS); (b) com o JSON
@@ -19,17 +19,15 @@ const admin = require("firebase-admin");
 const PROJETO = process.env.GOOGLE_CLOUD_PROJECT || "comercial-duas-rodas";
 const credenciais = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT || "null");
 const ESCOPOS = ["https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/datastore", "https://www.googleapis.com/auth/cloud-platform"];
-let auth;
+let auth, db;
 if (credenciais) {
-  admin.initializeApp({ credential: admin.credential.cert(credenciais), projectId: credenciais.project_id });
   auth = new google.auth.GoogleAuth({ credentials: credenciais, scopes: ESCOPOS });
+  db = new Firestore({ projectId: credenciais.project_id, credentials: { client_email: credenciais.client_email, private_key: credenciais.private_key } });
 } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-  // o firebase-admin não lê o arquivo de identidade federada; a googleapis lê, então o admin pega o token emprestado dela
+  // o arquivo de identidade federada é lido pelas credenciais padrão (ADC) tanto no Drive quanto no Firestore
   auth = new google.auth.GoogleAuth({ scopes: ESCOPOS });
-  const credencialAdmin = { getAccessToken: async () => { const cliente = await auth.getClient(); const r = await cliente.getAccessToken(); const exp = cliente.credentials && cliente.credentials.expiry_date ? Math.max(60, Math.floor((cliente.credentials.expiry_date - Date.now()) / 1000)) : 3000; return { access_token: typeof r === "string" ? r : r.token, expires_in: exp }; } };
-  admin.initializeApp({ credential: credencialAdmin, projectId: PROJETO });
+  db = new Firestore({ projectId: PROJETO });
 } else { console.error("Sem credencial: configure a identidade do GitHub (workflow) ou o segredo GOOGLE_SERVICE_ACCOUNT."); process.exit(1); }
-const db = admin.firestore();
 const drive = google.drive({ version: "v3", auth });
 
 const PASTA = "application/vnd.google-apps.folder";
