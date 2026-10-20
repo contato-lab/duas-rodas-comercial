@@ -1,0 +1,28 @@
+name: Robô do Drive
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # de hora em hora (UTC)
+  workflow_dispatch: {}
+
+concurrency:
+  group: robo-drive
+  cancel-in-progress: false
+
+jobs:
+  varrer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Instalar bibliotecas
+        run: npm install --no-save --no-audit --no-fund googleapis@144 firebase-admin@12
+      - name: Varrer a pasta Comercial e lançar na fila
+        run: node robo-drive.js
+        env:
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+          DRIVE_PASTA_ID: ${{ vars.DRIVE_PASTA_ID }}
+          DIAS_INICIAIS: ${{ vars.DIAS_INICIAIS }}
