@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 var CHAVE = "drc-tutorial-visto";
-var VERSAO_TUTORIAL = 4;
+var VERSAO_TUTORIAL = 5;
 
 /* ============================================================ passos do passeio
    rota: para onde ir antes de mostrar o passo. alvo: lista de seletores; usa o primeiro que existir e estiver visível.
@@ -35,8 +35,10 @@ var PASSOS = [
     texto: "Cadastrar em sequência percorre uma a uma as autorizações que vieram da planilha sem quantidades, já sugerindo a cota de brand pelo que a planilha mostra. Linha do tempo troca a tabela por barras no calendário: dá para ver renovação, sobreposição e quem está perto do fim. Nova autorização, no topo, aceita o PDF e lê Gecom, vigência, valor e cotas quando o PDF tem texto." },
   { rota: "#/fila", alvo: ['[data-acao="novo-fila"]'], titulo: "Fila de materiais",
     texto: "O atendimento registra aqui tudo que a marca mandou: o que é, o link do arquivo no Drive e o link parametrizado. Nada mais se perde no WhatsApp. Igor e Isa clicam em Dar data, e o material vira uma entrega programada no calendário. Quando sair, basta marcar como publicado." },
+  { rota: "#/brand", alvo: [".funil"], titulo: "Brand: o funil",
+    texto: "Quantos vídeos estão em cada fase: com o cliente, roteiro, gravação, edição e revisão, prontos para dar data. Clique numa fase para filtrar. Os créditos contratados que ainda não têm tema ficam fora do funil, agrupados em cada marca." },
   { rota: "#/brand", alvo: [".brand-card"], titulo: "Brand: um card por marca",
-    texto: "Dentro do card estão os vídeos da marca e a etapa em que cada um está. Laranja é etapa que depende do cliente. Clique no vídeo para abrir a ficha: lá tem a linha do tempo, o botão de avançar etapa, o registro de cobrança ao cliente e o contador de refações. Cada registro grava a data, e isso é a prova de que a revista cobrou." },
+    texto: "Dentro do card, cada vídeo em produção com a etapa, quem está com a bola, há quantos dias e o botão da ação daquele momento: Cobrar, Roteiro pronto, Gravado, Para revisão, Enviar ao cliente, Veiculou. A linha tracejada junta os créditos sem tema, com Cobrar tema e Iniciar um. Clique no vídeo para abrir a ficha completa, com linha do tempo, cobranças e refações. A visão Lista mostra todos os vídeos ordenados por quem está parado há mais tempo." },
   { rota: "#/edicao", alvo: ["main .card"], titulo: "Edição",
     texto: "A fila de edição e YouTube do New: status, datas de início, finalização, revisões e ajustes. Cada data em Revisões ou Ajustes é uma ida e volta. Branded e editorial ficam juntos, com filtro." },
   { rota: "#/calendario", alvo: [".cal"], titulo: "Calendário",
@@ -78,7 +80,7 @@ var GUIA = [
   { titulo: "Acompanhar um vídeo de brand", passos: [
     "Vá em Brand. Cada card é uma marca; dentro estão os vídeos e a etapa de cada um.",
     "Para começar um vídeo novo, clique em Novo brand no card da marca. Informe o tema (moto ou produto), o apresentador e a autorização.",
-    "Clique no vídeo para abrir a ficha. Use Avançar para passar de etapa: a data fica gravada na linha do tempo.",
+    "Cada vídeo tem um botão com a ação daquela etapa (Roteiro pronto, Gravado, Para revisão, Veiculou): um clique avança e grava a data. Para o resto, clique no vídeo e abra a ficha.",
     "Se o cliente está demorando, escreva a cobrança no campo e clique em Registrar cobrança. Fica gravado com a data: é a prova de que a revista cobrou.",
     "Use o contador de Refações a cada ida e volta de edição. Anote o motivo em Observações.",
     "Logística do produto registra se a marca manda a moto, se vamos retirar ou se o produto já está em mãos.",

@@ -212,7 +212,7 @@ function consumo(a) {
   ORDEM_PRODUTOS.forEach(function (p) {
     var contratado = +cotas[p] || 0, entregue = 0, programado = 0, andamento = 0;
     if (p === "brand") {
-      brands.forEach(function (b) { if (b.etapa === "veiculado") entregue++; else andamento++; });
+      brands.forEach(function (b) { if (b.etapa === "veiculado") entregue++; else if (!ehCredito(b)) andamento++; });
     } else {
       entregas.filter(function (e) { return e.produto === p; }).forEach(function (e) {
         var q = p === "banner" ? (+(e.metricas && e.metricas.impressoes) || 0) : (p === "revista" ? (+(e.quantidade) || 1) : 1);
@@ -267,7 +267,7 @@ function render() {
       break;
     case "/autorizacoes": titulo = "Autorizações"; sub = S.d.autorizacoes.length + " contratos · " + S.d.autorizacoes.filter(temCotas).length + " com cotas · as quantidades são editáveis direto na tabela"; conteudo = telaAutorizacoes(); acao = botao("Nova autorização", "prim", 'data-acao="nova-aut"', "plus"); break;
     case "/fila": titulo = "Fila de materiais"; sub = "O que o atendimento recebeu e ainda não tem data"; conteudo = telaFila(); acao = botao("Entrou material", "prim", 'data-acao="novo-fila"', "plus"); break;
-    case "/brand": titulo = "Brand"; sub = "Um card por marca; dentro, cada vídeo e a etapa em que está"; conteudo = telaBrand(); acao = botao("Novo brand", "prim", 'data-acao="novo-brand"', "plus"); break;
+    case "/brand": titulo = "Brand"; sub = "Produção dos vídeos: quem está com a bola, há quanto tempo e o que fazer agora"; conteudo = telaBrand(); acao = botao("Novo brand", "prim", 'data-acao="novo-brand"', "plus"); break;
     case "/edicao": titulo = "Edição"; sub = "Fila de edição e YouTube (New)"; conteudo = telaEdicao(); acao = botao("Novo material", "prim", 'data-acao="novo-edicao"', "plus"); break;
     case "/calendario": titulo = "Calendário"; sub = "Tudo que vai sair, por dia"; conteudo = telaCalendario(); break;
     case "/relatorios": titulo = "Relatórios"; sub = "Relatório por cliente na identidade da revista"; conteudo = telaRelatorios(); break;
@@ -340,7 +340,7 @@ function situacaoMarca(m) {
   var recentes = auts.slice().sort(function (a, b) { return String(b.fim || "").localeCompare(String(a.fim || "")); });
   var alvo = vig.filter(temCotas)[0] || fut.filter(temCotas)[0] || recentes.filter(temCotas)[0] || vig[0] || fut[0] || recentes[0] || null;
   var alertas = []; auts.forEach(function (a) { alertas = alertas.concat(alertasAut(a)); });
-  var producao = S.d.brands.filter(function (b) { return b.marcaId === m.id && b.etapa !== "veiculado"; });
+  var producao = S.d.brands.filter(function (b) { return b.marcaId === m.id && b.etapa !== "veiculado" && !ehCredito(b); });
   var ultima = null; (m.cobrancas || []).forEach(function (c) { if (!ultima || c.data > ultima) ultima = c.data; }); S.d.brands.filter(function (b) { return b.marcaId === m.id; }).forEach(function (b) { (b.cobrancas || []).forEach(function (c) { if (!ultima || c.data > ultima) ultima = c.data; }); });
   var id = "ok", nome = "Em dia";
   if (alertas.some(function (a) { return a.tipo === "erro"; })) { id = "vencida"; nome = "Vencida com saldo"; }
@@ -392,7 +392,7 @@ function telaInicio() {
     '<div class="vazio" style="margin:16px">Nenhum contrato vence nos próximos 60 dias.</div>';
   var alertas = todosAlertas();
   var alertasHtml = alertas.length ? '<div class="lista-alertas">' + alertas.slice(0, 8).map(function (al) { return '<a href="#/marcas/' + al.marcaId + '" class="alerta-box ' + al.tipo + '" style="text-decoration:none">' + icone("triangle-alert") + '<span class="t">' + esc(al.texto) + "</span></a>"; }).join("") + (alertas.length > 8 ? '<div class="small muted center">e mais ' + (alertas.length - 8) + ". Veja marca por marca.</div>" : "") + "</div>" : '<div class="vazio">Nenhum pacote atrasado em relação ao prazo.</div>';
-  var parados = S.d.brands.filter(function (b) { return b.etapa !== "veiculado" && ETAPAS_COM_CLIENTE[b.etapa] && diasParado(b) >= 14; }).sort(function (a, b) { return diasParado(b) - diasParado(a); }).slice(0, 6);
+  var parados = S.d.brands.filter(function (b) { return b.etapa !== "veiculado" && !ehCredito(b) && ETAPAS_COM_CLIENTE[b.etapa] && diasParado(b) >= 14; }).sort(function (a, b) { return diasParado(b) - diasParado(a); }).slice(0, 6);
   var paradosHtml = parados.length ? '<table class="tabela">' + parados.map(function (b) { var e = byId(ETAPAS_BRAND, b.etapa); return '<tr class="clicavel" data-acao="abrir-brand" data-id="' + attr(b.id) + '"><td><strong>' + esc(nomeMarca(b.marcaId)) + '</strong><div class="small muted">' + esc(b.titulo) + "</div></td><td>" + esc(e ? e.nome : b.etapa) + '</td><td class="nowrap right">' + diasParado(b) + ' dias<div class="small muted">' + (b.cobrancas && b.cobrancas.length ? b.cobrancas.length + " cobrança" + (b.cobrancas.length > 1 ? "s" : "") : "sem cobrança") + "</div></td></tr>"; }).join("") + "</table>" : '<div class="vazio" style="margin:16px">Nenhum vídeo parado com o cliente há 14 dias ou mais.</div>';
   var avisoEx = temExemplos() ? '<div class="alerta-box info">' + icone("info") + '<span class="t">Dados de exemplo ativos: cotas, entregas e materiais fictícios para mostrar a plataforma cheia. Para tirar, vá em Ajustes e clique em Remover dados de exemplo.</span></div>' : "";
   return avisoEx + kpis + semaforo + semana +
@@ -640,64 +640,93 @@ function telaFila() {
 }
 
 /* ============================================================ tela: brand (kanban) */
+/* crédito: vídeo contratado que ainda não tem tema (veio da planilha como "A definir") */
+function ehCredito(b) { return b.etapa === "definir_tema" && /^(a definir|aguardando cliente|aguardando|definir|-|)$/i.test(String(b.titulo || "").trim()) && !(b.historico || []).some(function (h) { return h.texto && !/^Criado|^Exemplo/.test(h.texto); }); }
+var FASES_BRAND = [
+  { id: "cliente", nome: "Com o cliente", etapas: ["definir_tema", "aprovacao_roteiro", "aprovacao_cliente"], cls: "alerta" },
+  { id: "roteiro", nome: "Roteiro", etapas: ["roteiro"], cls: "" },
+  { id: "gravacao", nome: "Gravação", etapas: ["agendar_gravacao", "gravado"], cls: "" },
+  { id: "edicao", nome: "Edição e revisão", etapas: ["edicao", "revisao_interna"], cls: "info" },
+  { id: "prontos", nome: "Prontos, dar data", etapas: ["data_veiculacao"], cls: "ok" }
+];
+function faseDe(etapa) { for (var i = 0; i < FASES_BRAND.length; i++) if (FASES_BRAND[i].etapas.indexOf(etapa) >= 0) return FASES_BRAND[i]; return null; }
+function quemEsta(b) { var e = byId(ETAPAS_BRAND, b.etapa); return e ? e.quem : ""; }
+/* ação rápida certa para a etapa atual */
+function acaoRapida(b) {
+  switch (b.etapa) {
+    case "definir_tema": case "aprovacao_roteiro": case "aprovacao_cliente": return { acao: "brand-cobrar-rapido", rotulo: "Cobrar", icone: "bell" };
+    case "roteiro": return { acao: "brand-avancar-rapido", rotulo: "Roteiro pronto", icone: "arrow-right" };
+    case "agendar_gravacao": return b.dataGravacao ? { acao: "brand-avancar-rapido", rotulo: "Gravado", icone: "check" } : { acao: "abrir-brand", rotulo: "Marcar", icone: "calendar" };
+    case "gravado": return { acao: "brand-avancar-rapido", rotulo: "Em edição", icone: "arrow-right" };
+    case "edicao": return { acao: "brand-avancar-rapido", rotulo: "Para revisão", icone: "arrow-right" };
+    case "revisao_interna": return { acao: "brand-avancar-rapido", rotulo: "Enviar ao cliente", icone: "arrow-right" };
+    case "data_veiculacao": return { acao: "brand-avancar-rapido", rotulo: "Veiculou", icone: "check" };
+  }
+  return null;
+}
+function avancarBrandRapido(id) {
+  var b = clone(byId(S.d.brands, id)); if (!b) return; var i = indiceEtapa(b.etapa); var prox = ETAPAS_BRAND[i + 1]; if (!prox) return;
+  b.etapa = prox.id; b.historico = b.historico || []; b.historico.push({ data: hojeISO(), etapa: prox.id, texto: "Avançou para " + prox.nome }); b.atualizadoEm = hojeISO();
+  if (prox.id === "veiculado" && !b.dataVeiculacao) b.dataVeiculacao = hojeISO();
+  return API.salvar("brands", b).then(function () { toast(nomeMarca(b.marcaId) + " · " + b.titulo + ": " + prox.nome + "."); render(); });
+}
+function proximaDataBrand(b) {
+  if (b.etapa === "veiculado") return b.dataVeiculacao ? { t: "saiu " + fmtDataCurta(b.dataVeiculacao), cls: "muted" } : null;
+  if (b.dataVeiculacao) return { t: "sai " + fmtDataExtensa(b.dataVeiculacao).replace(/\/\d{4}/, ""), cls: "info" };
+  if (b.dataGravacao && indiceEtapa(b.etapa) <= indiceEtapa("agendar_gravacao")) return { t: "grava " + fmtDataExtensa(b.dataGravacao).replace(/\/\d{4}/, ""), cls: "info" };
+  return null;
+}
+function linhaBrand(b, mostrarMarca) {
+  var e = byId(ETAPAS_BRAND, b.etapa) || {}; var d = diasParado(b); var cliente = !!ETAPAS_COM_CLIENTE[b.etapa]; var ar = acaoRapida(b); var pd = proximaDataBrand(b);
+  var trava = b.logistica && b.logistica !== "nao_precisa" && b.logistica !== "recebido" && indiceEtapa(b.etapa) <= indiceEtapa("agendar_gravacao") ? LOGISTICA[b.logistica] : "";
+  return '<div class="brand-linha" data-acao="abrir-brand" data-id="' + attr(b.id) + '"><div class="t">' + (mostrarMarca ? '<span class="marca-mini">' + esc(nomeMarca(b.marcaId)) + "</span> " : "") + esc(b.titulo) + (b.apresentador ? ' <span class="muted">· ' + esc(b.apresentador) + "</span>" : "") + (trava ? ' <span class="small" style="color:var(--alerta)">· ' + esc(trava.toLowerCase()) + "</span>" : "") + (b.refacoes >= 2 ? ' <span class="small" style="color:var(--erro)">· ' + b.refacoes + " refações</span>" : "") + "</div>" +
+    '<div class="row brand-dir">' + (pd ? '<span class="small" style="color:var(--' + (pd.cls === "info" ? "info" : "muted") + ')">' + esc(pd.t) + "</span>" : "") + '<span class="small ' + (cliente ? "" : "muted") + '" style="' + (cliente ? "color:var(--alerta)" : "") + '">' + esc(quemEsta(b)) + (b.etapa !== "veiculado" && d >= 7 ? " · " + d + " d" : "") + "</span>" + selo(b.etapa === "veiculado" ? (b.dataVeiculacao ? fmtDataCurta(b.dataVeiculacao) : "Veiculado") : (e.nome || b.etapa), b.etapa === "veiculado" ? "ok" : cliente ? (d >= 30 ? "erro" : "alerta") : "") +
+    (ar && b.etapa !== "veiculado" ? '<button type="button" class="btn p' + (ar.acao === "brand-cobrar-rapido" && d >= 14 ? " prim" : "") + '" data-acao="' + ar.acao + '" data-id="' + attr(b.id) + '" onclick="event.stopPropagation()">' + icone(ar.icone) + esc(ar.rotulo) + "</button>" : "") + "</div></div>";
+}
 function telaBrand() {
-  var lista = S.d.brands.filter(function (b) { return (!S.filtroBrandMarca || b.marcaId === S.filtroBrandMarca) && (!S.filtroBrandAut || b.autorizacaoId === S.filtroBrandAut); });
-  var q = S.busca.toLowerCase(); if (q) lista = lista.filter(function (b) { return (nomeMarca(b.marcaId) + " " + b.titulo + " " + (b.apresentador || "")).toLowerCase().indexOf(q) >= 0; });
-  var veiculados = lista.filter(function (b) { return b.etapa === "veiculado"; }).length;
+  var todos = S.d.brands.filter(function (b) { return (!S.filtroBrandMarca || b.marcaId === S.filtroBrandMarca) && (!S.filtroBrandAut || b.autorizacaoId === S.filtroBrandAut); });
+  var q = S.busca.toLowerCase(); if (q) todos = todos.filter(function (b) { return (nomeMarca(b.marcaId) + " " + b.titulo + " " + (b.apresentador || "")).toLowerCase().indexOf(q) >= 0; });
+  var creditos = todos.filter(ehCredito); var reais = todos.filter(function (b) { return !ehCredito(b); });
+  var producao = reais.filter(function (b) { return b.etapa !== "veiculado"; }); var veiculados = reais.filter(function (b) { return b.etapa === "veiculado"; });
+  var contFase = {}; FASES_BRAND.forEach(function (f) { contFase[f.id] = producao.filter(function (b) { return f.etapas.indexOf(b.etapa) >= 0; }).length; });
+  var bola = S.filtroBrandBola || "todos";
+  var filtrados = producao.filter(function (b) { var f = faseDe(b.etapa); if (bola === "todos") return true; if (bola === "cliente") return !!ETAPAS_COM_CLIENTE[b.etapa]; if (bola === "nossa") return !ETAPAS_COM_CLIENTE[b.etapa] && b.etapa !== "data_veiculacao"; if (bola === "prontos") return b.etapa === "data_veiculacao"; return f && f.id === bola; });
+  var totalProd = producao.length || 1;
+  var funil = '<div class="funil">' + FASES_BRAND.map(function (f) { var n = contFase[f.id]; return '<button type="button" class="funil-seg ' + f.cls + (bola === f.id ? " ativo" : "") + '" style="flex:' + Math.max(n, 2) + '" data-acao="filtro-brand-bola" data-v="' + f.id + '" title="' + attr(f.nome) + '"><span class="n">' + n + '</span><span class="r">' + esc(f.nome) + "</span></button>"; }).join("") + "</div>";
   var cab = '<div class="filtros"><div class="busca">' + icone("search") + '<input class="input" id="busca-brand" placeholder="Buscar marca, moto ou apresentador" value="' + attr(S.busca) + '" data-filtro="busca"></div>' +
     select("filtroBrandMarca", opcoesMarcas("Todas as marcas"), S.filtroBrandMarca, 'data-filtro="brandMarca"') +
-    (S.filtroBrandMarca ? select("filtroBrandAut", opcoesAuts(S.filtroBrandMarca, "Todas as autorizações"), S.filtroBrandAut, 'data-filtro="brandAut"') : "") +
-    '<div class="chips"><button type="button" class="chip' + (S.visaoBrand !== "etapa" ? " ativo" : "") + '" data-acao="visao-brand" data-v="marca">Por marca</button><button type="button" class="chip' + (S.visaoBrand === "etapa" ? " ativo" : "") + '" data-acao="visao-brand" data-v="etapa">Por etapa</button></div>' +
-    '<span class="small muted">' + lista.length + " vídeos · " + (lista.length - veiculados) + " em produção · " + veiculados + " veiculados</span></div>";
-  return cab + (S.visaoBrand === "etapa" ? brandPorEtapa(lista) : brandPorMarca(lista));
+    '<div class="chips">' + [["todos", "Todos (" + producao.length + ")"], ["cliente", "Com o cliente (" + producao.filter(function (b) { return ETAPAS_COM_CLIENTE[b.etapa]; }).length + ")"], ["nossa", "Na nossa mão (" + producao.filter(function (b) { return !ETAPAS_COM_CLIENTE[b.etapa] && b.etapa !== "data_veiculacao"; }).length + ")"], ["prontos", "Prontos (" + contFase.prontos + ")"]].map(function (o) { return '<button type="button" class="chip' + (bola === o[0] ? " ativo" : "") + '" data-acao="filtro-brand-bola" data-v="' + o[0] + '">' + o[1] + "</button>"; }).join("") + "</div>" +
+    '<div class="chips" style="margin-left:auto"><button type="button" class="chip' + (S.visaoBrand !== "lista" ? " ativo" : "") + '" data-acao="visao-brand" data-v="marca">Por marca</button><button type="button" class="chip' + (S.visaoBrand === "lista" ? " ativo" : "") + '" data-acao="visao-brand" data-v="lista">Lista</button></div></div>' +
+    '<div class="small muted">' + producao.length + " em produção · " + creditos.length + " crédito" + (creditos.length === 1 ? "" : "s") + " sem tema · " + veiculados.length + " veiculado" + (veiculados.length === 1 ? "" : "s") + "</div>";
+  return cab + funil + (S.visaoBrand === "lista" ? brandLista(filtrados, creditos) : brandPorMarca(filtrados, creditos, veiculados, bola));
 }
-/* um card por marca: dentro dele os vídeos, cada um com a etapa em que está */
-function brandPorMarca(lista) {
-  var porMarca = {};
-  lista.forEach(function (b) { (porMarca[b.marcaId] = porMarca[b.marcaId] || []).push(b); });
-  var ids = Object.keys(porMarca).sort(function (a, b) { return porNome({ nome: nomeMarca(a) }, { nome: nomeMarca(b) }); });
+function brandPorMarca(filtrados, creditos, veiculados, bola) {
+  var porMarca = {}; filtrados.forEach(function (b) { (porMarca[b.marcaId] = porMarca[b.marcaId] || { prod: [], cred: [], veic: [] }).prod.push(b); });
+  creditos.forEach(function (b) { if (bola !== "todos" && !porMarca[b.marcaId]) return; (porMarca[b.marcaId] = porMarca[b.marcaId] || { prod: [], cred: [], veic: [] }).cred.push(b); });
+  veiculados.forEach(function (b) { if (porMarca[b.marcaId]) porMarca[b.marcaId].veic.push(b); else if (bola === "todos") porMarca[b.marcaId] = { prod: [], cred: [], veic: [b] }; });
+  var ids = Object.keys(porMarca).sort(function (a, b) { var pa = porMarca[a].prod.some(function (x) { return ETAPAS_COM_CLIENTE[x.etapa] && diasParado(x) >= 14; }), pb = porMarca[b].prod.some(function (x) { return ETAPAS_COM_CLIENTE[x.etapa] && diasParado(x) >= 14; }); return (pb - pa) || (porMarca[b].prod.length - porMarca[a].prod.length) || porNome({ nome: nomeMarca(a) }, { nome: nomeMarca(b) }); });
   if (!ids.length) return '<div class="vazio">Nenhum brand nesse filtro. ' + botao("Novo brand", "p", 'data-acao="novo-brand"', "plus") + "</div>";
+  var hoje = hojeISO();
   return '<div class="lista-marcas brand-marcas">' + ids.map(function (mid) {
-    var itens = porMarca[mid];
-    var producao = itens.filter(function (b) { return b.etapa !== "veiculado"; }).sort(function (a, b) { return indiceEtapa(b.etapa) - indiceEtapa(a.etapa) || diasParado(b) - diasParado(a); });
-    var veic = itens.filter(function (b) { return b.etapa === "veiculado"; }).sort(function (a, b) { return String(b.dataVeiculacao || "").localeCompare(String(a.dataVeiculacao || "")); });
-    var comCliente = producao.filter(function (b) { return ETAPAS_COM_CLIENTE[b.etapa]; }).length;
-    var maisParado = producao.reduce(function (m, b) { return Math.max(m, diasParado(b)); }, 0);
+    var g = porMarca[mid]; var sit = situacaoMarca(marca(mid)); var a = sit.alvo; var cota = "";
+    var auts = autsDaMarca(mid).filter(function (x) { return (x.cotas || {}).brand; }); var ab = auts.filter(function (x) { return autVigente(x); })[0] || auts[0] || null;
+    if (ab) { var c = consumo(ab).brand; var t = tempoDecorrido(ab); cota = '<div class="mini-cota" style="grid-template-columns:auto 1fr auto"><span class="small muted">' + esc(rotuloAut(ab)) + "</span>" + barra(c.pct, classeCota(c, t), t) + '<span class="n">' + c.entregue + "/" + c.contratado + " vídeos</span></div>"; }
+    var comCliente = g.prod.filter(function (b) { return ETAPAS_COM_CLIENTE[b.etapa]; }); var maisParado = comCliente.reduce(function (m, b) { return Math.max(m, diasParado(b)); }, 0);
     var aberto = S.brandVeicAberto && S.brandVeicAberto[mid];
-    var auts = autsDaMarca(mid).filter(function (a) { return (a.cotas || {}).brand; });
-    var cota = "";
-    if (auts.length) { var a = auts.filter(function (x) { var s = situacaoAut(x).id; return s === "vigente" || s === "vencendo"; })[0] || auts[0]; var c = consumo(a).brand; var t = tempoDecorrido(a); cota = '<div class="mini-cota" title="' + attr(rotuloAut(a)) + '"><span>' + esc(rotuloAut(a)).slice(0, 14) + "</span>" + barra(c.pct, classeCota(c, t), t) + '<span class="n">' + c.entregue + "/" + c.contratado + "</span></div>"; }
-    function linha(b) {
-      var e = byId(ETAPAS_BRAND, b.etapa) || {}; var d = diasParado(b);
-      return '<div class="brand-linha" data-acao="abrir-brand" data-id="' + attr(b.id) + '"><div class="t">' + esc(b.titulo) + (b.apresentador ? ' <span class="muted">· ' + esc(b.apresentador) + "</span>" : "") + "</div>" +
-        '<div class="row" style="gap:6px;flex-wrap:nowrap">' + (b.etapa === "veiculado" ? selo(b.dataVeiculacao ? fmtDataCurta(b.dataVeiculacao) : "Veiculado", "ok") : selo(e.nome || b.etapa, ETAPAS_COM_CLIENTE[b.etapa] ? "alerta" : "")) +
-        (b.etapa !== "veiculado" && d >= 14 ? '<span class="small ' + (d >= 30 ? "" : "muted") + '" style="' + (d >= 30 ? "color:var(--erro)" : "") + '">' + d + " d</span>" : "") +
-        (b.cobrancas && b.cobrancas.length ? '<span class="small muted" title="cobranças">' + icone("bell", "ic") + b.cobrancas.length + "</span>" : "") + "</div></div>";
-    }
-    return '<div class="card marca-card brand-card" style="cursor:default;transform:none">' +
-      '<div class="row between"><a href="#/marcas/' + mid + '" class="nome" style="text-decoration:none">' + esc(nomeMarca(mid)) + "</a>" + (comCliente ? selo(comCliente + " com o cliente", maisParado >= 30 ? "erro" : "alerta") : (producao.length ? selo(producao.length + " em produção", "info") : selo("Tudo veiculado", "ok"))) + "</div>" +
-      '<div class="small muted">' + itens.length + " vídeo" + (itens.length > 1 ? "s" : "") + " · " + producao.length + " em produção · " + veic.length + " veiculado" + (veic.length === 1 ? "" : "s") + "</div>" + cota +
-      (producao.length ? '<div class="brand-lista">' + producao.map(linha).join("") + "</div>" : "") +
-      (veic.length ? '<button type="button" class="btn p fantasma" style="align-self:flex-start" data-acao="brand-veic" data-id="' + attr(mid) + '">' + icone(aberto ? "chevron-left" : "chevron-right") + (aberto ? "Esconder veiculados" : "Ver " + veic.length + " veiculado" + (veic.length > 1 ? "s" : "")) + "</button>" + (aberto ? '<div class="brand-lista">' + veic.map(linha).join("") + "</div>" : "") : "") +
-      '<div class="row" style="margin-top:auto">' + botao("Novo brand", "p", 'data-acao="novo-brand" data-marca="' + attr(mid) + '"', "plus") + "</div></div>";
+    var cred = g.cred.length ? '<div class="credito-linha' + (sit.id === "vencida" ? " erro" : "") + '"><span>' + g.cred.length + " crédito" + (g.cred.length > 1 ? "s" : "") + " sem tema definido" + (sit.id === "vencida" ? " · contrato vencido" : "") + (sit.ultimaCobranca ? " · cobrado há " + diasEntre(sit.ultimaCobranca, hoje) + " d" : "") + '</span><span class="row">' + botao("Cobrar tema", "p", 'data-acao="nova-cobranca-marca" data-id="' + attr(mid) + '" data-produto="brand"', "bell") + botao("Iniciar um", "p", 'data-acao="abrir-brand" data-id="' + attr(g.cred[0].id) + '"', "arrow-right") + "</span></div>" : "";
+    g.prod.sort(function (a, b) { return (ETAPAS_COM_CLIENTE[b.etapa] ? 1 : 0) - (ETAPAS_COM_CLIENTE[a.etapa] ? 1 : 0) || diasParado(b) - diasParado(a) || indiceEtapa(b.etapa) - indiceEtapa(a.etapa); });
+    return '<div class="card marca-card brand-card" style="cursor:default;transform:none"><div class="row between"><a href="#/marcas/' + mid + '" class="nome" style="text-decoration:none">' + esc(nomeMarca(mid)) + "</a>" + (comCliente.length ? selo(comCliente.length + " com o cliente" + (maisParado >= 14 ? " · " + maisParado + " d" : ""), maisParado >= 30 ? "erro" : "alerta") : (g.prod.length ? selo(g.prod.length + " em produção", "info") : (g.cred.length ? selo("só créditos") : selo("Tudo veiculado", "ok")))) + "</div>" + cota +
+      (g.prod.length ? '<div class="brand-lista">' + g.prod.map(function (b) { return linhaBrand(b, false); }).join("") + "</div>" : "") + cred +
+      '<div class="row between" style="margin-top:auto">' + (g.veic.length ? '<button type="button" class="btn p fantasma" data-acao="brand-veic" data-id="' + attr(mid) + '">' + icone(aberto ? "chevron-left" : "chevron-right") + (aberto ? "Esconder veiculados" : g.veic.length + " veiculado" + (g.veic.length > 1 ? "s" : "")) + "</button>" : "<span></span>") + botao("Novo brand", "p", 'data-acao="novo-brand" data-marca="' + attr(mid) + '"', "plus") + "</div>" +
+      (aberto ? '<div class="brand-lista">' + g.veic.sort(function (a, b) { return String(b.dataVeiculacao || "").localeCompare(String(a.dataVeiculacao || "")); }).map(function (b) { return linhaBrand(b, false); }).join("") + "</div>" : "") + "</div>";
   }).join("") + "</div>";
 }
-function brandPorEtapa(lista) {
-  var porEtapa = {}; ETAPAS_BRAND.forEach(function (e) { porEtapa[e.id] = []; });
-  lista.forEach(function (b) { (porEtapa[b.etapa] || porEtapa.definir_tema).push(b); });
-  var veiculados = porEtapa.veiculado; var mostrarVeic = S.mostrarVeiculados;
-  return '<div class="kanban">' + ETAPAS_BRAND.filter(function (e) { return e.id !== "veiculado"; }).map(function (e) {
-      var itens = porEtapa[e.id].sort(function (a, b) { return diasParado(b) - diasParado(a); });
-      return '<div class="coluna"><div class="cab"><h3>' + esc(e.nome) + '</h3><span class="n">' + itens.length + "</span></div>" + itens.map(cartaoBrand).join("") + "</div>";
-    }).join("") + "</div>" +
-    '<div class="card"><div class="cab"><h2>Veiculados (' + veiculados.length + ")</h2>" + botao(mostrarVeic ? "Esconder" : "Mostrar", "p", 'data-acao="toggle-veiculados"') + "</div>" + (mostrarVeic ? '<div class="corpo sem tabela-wrap"><table class="tabela">' + veiculados.sort(function (a, b) { return String(b.dataVeiculacao || "").localeCompare(String(a.dataVeiculacao || "")); }).map(function (b) { return '<tr class="clicavel" data-acao="abrir-brand" data-id="' + attr(b.id) + '"><td class="nowrap mono">' + fmtData(b.dataVeiculacao) + "</td><td><strong>" + esc(nomeMarca(b.marcaId)) + "</strong></td><td>" + esc(b.titulo) + "</td><td>" + esc(b.apresentador || "") + "</td><td>" + (b.links && b.links.youtube ? linkExterno(b.links.youtube, "YouTube") : "") + "</td></tr>"; }).join("") + "</table></div>" : "") + "</div>";
+function brandLista(filtrados, creditos) {
+  var lista = filtrados.slice().sort(function (a, b) { return (ETAPAS_COM_CLIENTE[b.etapa] ? 1 : 0) - (ETAPAS_COM_CLIENTE[a.etapa] ? 1 : 0) || diasParado(b) - diasParado(a); });
+  var porMarcaCred = {}; creditos.forEach(function (b) { porMarcaCred[b.marcaId] = (porMarcaCred[b.marcaId] || 0) + 1; });
+  return '<div class="card"><div class="corpo sem">' + (lista.length ? '<div class="brand-lista sem-borda">' + lista.map(function (b) { return linhaBrand(b, true); }).join("") + "</div>" : '<div class="vazio" style="margin:16px">Nenhum vídeo nesse filtro.</div>') + "</div></div>" +
+    (Object.keys(porMarcaCred).length ? '<div class="card"><div class="cab"><h2>Créditos a iniciar</h2><span class="small muted">vídeos contratados que ainda não têm tema; não contam como produção</span></div><div class="corpo chips">' + Object.keys(porMarcaCred).sort(function (a, b) { return porNome({ nome: nomeMarca(a) }, { nome: nomeMarca(b) }); }).map(function (mid) { var primeiro = creditos.filter(function (b) { return b.marcaId === mid; })[0]; return '<button type="button" class="chip" data-acao="abrir-brand" data-id="' + attr(primeiro.id) + '">' + esc(nomeMarca(mid)) + ' <span class="muted">· ' + porMarcaCred[mid] + "</span></button>"; }).join("") + "</div></div>" : "");
 }
-function cartaoBrand(b) {
-  var dias = diasParado(b); var cls = dias >= 30 ? " muito-parado" : (dias >= 14 ? " parado" : "");
-  return '<div class="cartao' + cls + '" data-acao="abrir-brand" data-id="' + attr(b.id) + '"><span class="marca">' + esc(nomeMarca(b.marcaId)) + '</span><span class="tit">' + esc(b.titulo) + "</span>" +
-    '<div class="pe">' + (b.apresentador ? "<span>" + esc(b.apresentador) + "</span>" : "") + (b.dataGravacao ? "<span>grav. " + fmtDataCurta(b.dataGravacao) + "</span>" : "") + (b.dataVeiculacao ? "<span>sai " + fmtDataCurta(b.dataVeiculacao) + "</span>" : "") + (dias ? '<span style="margin-left:auto">' + dias + " d</span>" : "") + (b.cobrancas && b.cobrancas.length ? '<span title="cobranças">' + icone("bell", "") + b.cobrancas.length + "</span>" : "") + (b.refacoes ? "<span>" + b.refacoes + " refação" + (b.refacoes > 1 ? "ões" : "") + "</span>" : "") + "</div></div>";
-}
-
 /* ============================================================ tela: edição (New) */
 function telaEdicao() {
   var lista = S.d.edicao.slice();
@@ -822,6 +851,7 @@ function dialogo() {
     case "ajuda": html = window.Tutorial ? window.Tutorial.htmlAjuda(d.secao) : ""; break;
     case "kpi": html = dialogoKpi(d.filtro); break;
     case "texto": html = '<div class="dialogo">' + cabDialogo(d.titulo) + '<div class="corpo"><textarea class="textarea" style="min-height:200px" readonly>' + esc(d.texto) + '</textarea><div class="small muted">Selecione o texto e copie.</div></div><div class="pe">' + botao("Fechar", "", 'data-acao="fechar"') + "</div></div>"; break;
+    case "cobranca-brand": { var bb = byId(S.d.brands, d.brandId) || {}; html = '<form class="dialogo" data-form="cobranca-brand">' + cabDialogo("Cobrar o cliente: " + nomeMarca(bb.marcaId), bb.titulo + " · " + ((byId(ETAPAS_BRAND, bb.etapa) || {}).nome || "") + ". Fica gravado na ficha do vídeo com a data de hoje.") + '<div class="corpo">' + campo("O que foi cobrado", textarea("texto", "", 'required autofocus placeholder="Ex.: e-mail para a Érica pedindo o tema do vídeo"')) + campo("Data", input("data", hojeISO(), "date", "required")) + "</div>" + peForm("Registrar cobrança") + "</form>"; break; }
     case "cobranca-marca": html = '<form class="dialogo" data-form="cobranca-marca">' + cabDialogo("Registrar cobrança: " + nomeMarca(d.marcaId), "Fica gravado com a data de hoje. Diga para quem, por qual canal e o que foi pedido.") + '<div class="corpo">' + campo("Produto", select("produto", [["", "Geral"]].concat(ORDEM_PRODUTOS.map(function (p) { return [p, PRODUTOS[p].nome]; })), d.produto)) + campo("O que foi cobrado", textarea("texto", "", 'required autofocus placeholder="Ex.: e-mail para o Marcos pedindo as artes dos 9 posts que faltam"')) + campo("Data", input("data", hojeISO(), "date", "required")) + "</div>" + peForm("Registrar") + "</form>"; break;
     case "confirmar": html = '<div class="dialogo"><div class="cab"><h2>' + esc(d.titulo) + '</h2></div><div class="corpo"><p style="margin:0">' + esc(d.texto) + '</p></div><div class="pe">' + botao("Cancelar", "", 'data-acao="fechar"') + botao(d.botao || "Confirmar", "perigo", 'data-acao="confirmar-ok"') + "</div></div>"; break;
   }
@@ -1106,6 +1136,10 @@ function aoSubmeter(ev) {
       if (fila && item.status !== "agendado" && fila.status !== "publicado") { fila.status = "publicado"; API.salvar("fila", fila).then(render); }
     });
   }
+  if (tipo === "cobranca-brand") {
+    var bq = clone(byId(S.d.brands, d.brandId)); bq.cobrancas = bq.cobrancas || []; bq.cobrancas.push({ data: f.data || hojeISO(), texto: f.texto });
+    return salvar("brands", bq, "Cobrança registrada em " + fmtData(f.data || hojeISO()) + ".");
+  }
   if (tipo === "cobranca-marca") {
     var mk = clone(marca(d.marcaId)); mk.cobrancas = mk.cobrancas || []; mk.cobrancas.push({ data: f.data || hojeISO(), texto: f.texto, produto: f.produto || null });
     return salvar("marcas", mk, "Cobrança registrada em " + fmtData(f.data || hojeISO()) + ".");
@@ -1152,6 +1186,9 @@ function aoClicar(ev) {
     case "cal-mes": S.calMes = v; return render();
     case "toggle-veiculados": S.mostrarVeiculados = !S.mostrarVeiculados; return render();
     case "visao-brand": S.visaoBrand = v; return render();
+    case "filtro-brand-bola": S.filtroBrandBola = S.filtroBrandBola === v && FASES_BRAND.some(function (f) { return f.id === v; }) ? "todos" : v; return render();
+    case "brand-avancar-rapido": return avancarBrandRapido(id);
+    case "brand-cobrar-rapido": { var bc = byId(S.d.brands, id); S.dialogo = { tipo: "cobranca-brand", brandId: id }; return render(); }
     case "brand-veic": S.brandVeicAberto = S.brandVeicAberto || {}; S.brandVeicAberto[id] = !S.brandVeicAberto[id]; return render();
     case "nova-marca": return abrirMarcaForm(null);
     case "editar-marca": return abrirMarcaForm(marca(id));

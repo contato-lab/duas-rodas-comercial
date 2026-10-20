@@ -384,3 +384,23 @@ html[data-tema="escuro"] .ano-cel.cheia.post{background:#1E3A8A;color:#BFDBFE}ht
 .tl-barra.passada{background:var(--muted-bg);color:var(--muted)}
 .tl-barra.sem{background:transparent;border-style:dashed;color:var(--muted)}
 .tl-hoje{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--vermelho);opacity:.8;z-index:1;pointer-events:none}
+
+/* brand: funil, créditos, linhas */
+.funil{display:flex;gap:3px}
+.funil-seg{border:1px solid var(--borda);background:var(--card);color:var(--fg);font:inherit;cursor:pointer;padding:8px 10px;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0;overflow:hidden}
+.funil-seg:first-child{border-radius:var(--raio) 0 0 var(--raio)}.funil-seg:last-child{border-radius:0 var(--raio) var(--raio) 0}
+.funil-seg .n{font-family:var(--display);font-size:22px;line-height:1}
+.funil-seg .r{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.funil-seg.alerta{background:var(--alerta-bg);color:var(--alerta)}.funil-seg.alerta .r{color:var(--alerta)}
+.funil-seg.info{background:var(--info-bg);color:var(--info)}.funil-seg.info .r{color:var(--info)}
+.funil-seg.ok{background:var(--ok-bg);color:var(--ok)}.funil-seg.ok .r{color:var(--ok)}
+.funil-seg.ativo{outline:2px solid var(--fg);outline-offset:-2px}
+.funil-seg:hover{filter:brightness(.97)}
+.brand-marcas{grid-template-columns:repeat(auto-fill,minmax(360px,1fr))}
+.brand-linha{padding:7px 10px}
+.brand-linha .brand-dir{gap:6px;flex-wrap:nowrap;flex:none}
+.brand-linha .marca-mini{font-weight:700;color:var(--vermelho);font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-right:4px}
+.brand-lista.sem-borda{border:0;border-radius:0}
+.credito-linha{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 10px;border:1px dashed var(--borda-forte);border-radius:var(--raio-p);font-size:12px;color:var(--muted)}
+.credito-linha.erro{border-color:var(--erro);color:var(--erro)}
+@media (max-width:700px){.brand-linha{flex-direction:column;align-items:flex-start}.brand-linha .brand-dir{flex-wrap:wrap}}
