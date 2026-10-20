@@ -45,21 +45,15 @@ Para mudar as regras de novo: abrir https://shell.cloud.google.com com a conta, 
 
 Visualizações, curtidas e comentários dos vídeos de brand entram pelo link do campo Vídeo final (YouTube). A chave está em `firebase-config.js` (`window.YOUTUBE_KEY`), criada no Google Cloud do projeto `comercial-duas-rodas` com o nome "YouTube Comercial Duas Rodas", restrita só à YouTube Data API v3 e aos sites `https://contato-lab.github.io/*` e `http://localhost:8765/*`. Por isso ela pode ficar no código: fora desses endereços e dessa API ela não serve para nada. Os números ficam gravados no vídeo (`brand.youtube`) e atualizam sozinhos ao abrir Relatórios da marca, ou pelo botão Números do YouTube no menu Brand. Cota da API: 10.000 unidades por dia, cada consulta de até 50 vídeos gasta 1.
 
-## Robô do Google Drive (montado em 20/10/2026)
+## Robô do Google Drive (ligado em 20/10/2026)
 
-Arquivos: `robo-drive.js` (o robô) e `.github/workflows/robo-drive.yml` (o agendamento, de hora em hora, no GitHub Actions, gratuito para repositório público). O robô lê a pasta **Comercial** do Drive (uma subpasta por marca, dentro dela por mês ou por material) e lança cada arquivo novo na fila de materiais com link, marca (pelo nome da subpasta) e tipo (pelo nome e pelo formato do arquivo). Arquivo trocado depois de lançado ganha uma observação na fila. Nada é apagado nem movido no Drive: a conta só lê.
+Arquivos: `robo-drive.js` (o robô) e `.github/workflows/robo-drive.yml` (o agendamento, de hora em hora, no GitHub Actions, gratuito para repositório público). O robô lê a pasta **MATERIAIS** do Drive da Lime (em Compartilhados comigo / 2025 / DUAS RODAS / MATERIAIS, id `1MjcOLiyJ_z5sZ8MK63YjOhwK_jGB9tLa`, guardado na variável `DRIVE_PASTA_ID` do repositório). Dentro dela, uma subpasta por marca (mesmo nome da marca na plataforma) e, dentro, o que o time quiser (por mês ou solto). Cada arquivo novo entra na fila de materiais com link, marca (pela subpasta) e tipo (pelo nome e formato). Arquivo trocado depois de lançado ganha uma observação na fila. Nada é apagado nem movido no Drive: a conta só lê.
 
-Como ele reconhece a marca: nome da subpasta igual ao nome da marca na plataforma. Se a pasta tiver outro nome, preencher o campo **Pasta no Drive** na ficha da marca. Arquivo em pasta não reconhecida entra na fila sem marca, com aviso para escolher.
+Se a pasta de uma marca tiver outro nome, preencher o campo **Pasta no Drive** na ficha da marca. Arquivo em pasta não reconhecida entra na fila sem marca, com aviso para escolher. Na primeira rodada o robô só olha arquivos alterados nos últimos 30 dias (variável `DIAS_INICIAIS` muda isso).
 
-Para ligar (só uma vez):
+Como ele entra no Google, sem chave nenhuma: a organização da conta proíbe chaves de conta de serviço, então o GitHub se identifica direto no Google Cloud (Workload Identity Federation). No projeto `comercial-duas-rodas` existe o pool `github` com o provedor `github`, aceitando só o repositório `contato-lab/duas-rodas-comercial`, e esse repositório pode agir como a conta `firebase-adminsdk-fbsvc@comercial-duas-rodas.iam.gserviceaccount.com` (que já tem Firestore). A pasta MATERIAIS está compartilhada com esse e-mail como leitor. Foi feito pelo Cloud Shell com `gcloud iam workload-identity-pools create`, `providers create-oidc` e `service-accounts add-iam-policy-binding`. APIs ativadas: Drive, IAM Credentials, STS.
 
-1. No Firebase (console.firebase.google.com, projeto comercial-duas-rodas), em Configurações do projeto, aba Contas de serviço, clicar em **Gerar nova chave privada**. Baixa um arquivo `.json`. Essa é a chave da conta `firebase-adminsdk-fbsvc@comercial-duas-rodas.iam.gserviceaccount.com`, que já tem acesso ao Firestore.
-2. No Drive, compartilhar a pasta **Comercial** com esse e-mail acima, como **Leitor**.
-3. No GitHub, em Settings do repositório, Secrets and variables, Actions, criar o segredo **GOOGLE_SERVICE_ACCOUNT** colando o conteúdo inteiro do arquivo `.json`. Apagar o arquivo do computador depois.
-4. (Opcional) Na aba Variables, criar **DRIVE_PASTA_ID** com o id da pasta Comercial (o trecho depois de `folders/` no endereço dela). Sem isso o robô procura uma pasta chamada Comercial entre as compartilhadas. **DIAS_INICIAIS** muda quantos dias para trás a primeira rodada olha (padrão 30).
-5. Em Actions, abrir "Robô do Drive" e clicar em **Run workflow** para a primeira rodada. Depois ele roda sozinho a cada hora.
-
-A API do Google Drive já está ativada no projeto (20/10/2026). O estado de cada rodada fica em `robo/drive` no Firestore (a plataforma mostra em Ajustes o último arquivo lançado). Aviso do GitHub: agendamento em repositório sem commit por 60 dias é pausado; basta reativar em Actions.
+Para rodar na hora, sem esperar a hora cheia: Actions, "Robô do Drive", Run workflow. O estado de cada rodada fica em `robo/drive` no Firestore; a plataforma mostra em Ajustes o último arquivo lançado. Aviso do GitHub: agendamento em repositório sem commit por 60 dias é pausado; basta reativar em Actions.
 
 ## Próximas etapas combinadas
 
