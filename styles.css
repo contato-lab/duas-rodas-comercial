@@ -474,3 +474,7 @@ html[data-tema="escuro"] .ano-cel.cheia.post{background:#1E3A8A;color:#BFDBFE}ht
 .kb-mais{align-self:center;margin-top:4px}
 @media (max-width:1100px){.kb{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:600px){.kb{grid-template-columns:1fr}}
+
+.yt-box:empty{display:none}
+.yt-box .alerta-box{align-items:center}
+.yt-box .alerta-box .btn{margin-left:auto;flex:none}

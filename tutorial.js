@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 var CHAVE = "drc-tutorial-visto";
-var VERSAO_TUTORIAL = 9;
+var VERSAO_TUTORIAL = 10;
 
 /* ============================================================ passos do passeio
    rota: para onde ir antes de mostrar o passo. alvo: lista de seletores; usa o primeiro que existir e estiver visível.
@@ -93,8 +93,8 @@ var GUIA = [
     "Na visão Tabela dá para corrigir status e datas direto na linha e registrar rodadas antigas com o botão +.",
     "Cole o link de exibição (YouTube não listado) para o cliente aprovar e o link do material no Drive." ] },
   { titulo: "Números do YouTube sem digitar", passos: [
-    "Na ficha do vídeo de brand, preencha o campo Vídeo final (YouTube) com o link público ou não listado.",
-    "Os números (visualizações, curtidas e comentários) entram sozinhos quando alguém abre Relatórios daquela marca, e também pelo botão Números do YouTube no menu Brand.",
+    "Na ficha do vídeo de brand, cole o link público ou não listado no campo Vídeo final (YouTube). Em um segundo aparecem visualizações, curtidas e comentários logo abaixo; ao salvar, ficam gravados.",
+    "Todo dia, quem abrir a plataforma primeiro atualiza sozinho todos os vídeos com link. No menu Brand aparece quantos já foram lidos hoje, e o botão Atualizar agora força de novo.",
     "No relatório, a tela de cada branded já sai com esses números. Se preferir outro valor, cadastre uma entrega de brand com os números à mão, que ela tem prioridade." ] },
   { titulo: "Gerar o relatório de um cliente", passos: [
     "Vá em Relatórios. Escolha a marca e a autorização. Se quiser só um mês, preencha o período.",

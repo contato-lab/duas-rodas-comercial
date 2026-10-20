@@ -134,9 +134,36 @@ function atualizarYoutubeBrands(lista, silencioso) {
   var hoje = hojeISO();
   return buscarYoutube(ids).then(function (mapa) {
     var n = 0; var salvar = [];
-    alvo.forEach(function (b) { var st = mapa[youtubeId(b.links.youtube)]; if (!st) return; var nb = clone(b); nb.youtube = { visualizacoes: st.visualizacoes, curtidas: st.curtidas, comentarios: st.comentarios, atualizadoEm: hoje }; salvar.push(nb); n++; });
+    alvo.forEach(function (b) { var st = mapa[youtubeId(b.links.youtube)]; if (!st) return; var nb = clone(b); nb.youtube = { visualizacoes: st.visualizacoes, curtidas: st.curtidas, comentarios: st.comentarios, atualizadoEm: hoje, link: b.links.youtube }; salvar.push(nb); n++; });
     return Promise.all(salvar.map(function (nb) { return API.salvar("brands", nb); })).then(function () { if (!silencioso) toast("Números do YouTube atualizados em " + n + (n === 1 ? " vídeo." : " vídeos.")); else if (n) toast("YouTube: " + n + (n === 1 ? " vídeo atualizado." : " vídeos atualizados.")); render(); return n; });
   }).catch(function (e) { toast("Não deu para ler o YouTube: " + (e && e.message ? e.message : "erro de rede")); return 0; });
+}
+function htmlYoutubeBox(b, link, estado) {
+  var id = youtubeId(link); if (!id) return '<div class="yt-box"></div>';
+  var y = b.youtube && (!b.youtube.link || b.youtube.link === link) ? b.youtube : null;
+  var cls = "info", txt, btn = "";
+  if (!temYoutube()) txt = "Números do YouTube: falta a chave da API (veja em Ajustes).";
+  else if (estado === "lendo") txt = "Lendo o YouTube...";
+  else if (estado === "nao_achei") { cls = "alerta"; txt = "Não achei esse vídeo no YouTube. Confira o link; vídeo privado não dá para ler."; }
+  else if (estado === "erro") { cls = "alerta"; txt = "Não consegui falar com o YouTube agora. Tento de novo quando você salvar."; }
+  else if (y) { cls = "ok"; txt = resumoYoutube(y) + (y.atualizadoEm === hojeISO() && !b.id ? " · grava quando você salvar" : ""); btn = b.id ? botao("Atualizar", "p", 'data-acao="yt-brand" data-id="' + attr(b.id) + '"', "refresh") : ""; }
+  else { txt = "Ainda sem números deste vídeo."; btn = b.id ? botao("Puxar números", "p", 'data-acao="yt-brand" data-id="' + attr(b.id) + '"', "refresh") : ""; }
+  return '<div class="yt-box"><div class="alerta-box ' + cls + '">' + icone("chart") + '<span class="t">' + esc(txt) + "</span>" + btn + "</div></div>";
+}
+var ytTimer = null;
+function previaYoutube(link) {
+  var it = S.dialogo && S.dialogo.tipo === "brand" ? S.dialogo.item : null; if (!it) return;
+  function trocar(html) { var box = document.querySelector(".dialogo .yt-box"); if (box) box.outerHTML = html; }
+  var id = youtubeId(link);
+  if (!id || !temYoutube()) { if (it.youtube && it.youtube.link && it.youtube.link !== link) delete it.youtube; trocar(htmlYoutubeBox(it, link)); return; }
+  if (it.youtube && it.youtube.link === link) { trocar(htmlYoutubeBox(it, link)); return; }
+  trocar(htmlYoutubeBox(it, link, "lendo"));
+  buscarYoutube([id]).then(function (mapa) {
+    if (!S.dialogo || S.dialogo.item !== it) return; var st = mapa[id];
+    if (!st) { delete it.youtube; trocar(htmlYoutubeBox(it, link, "nao_achei")); return; }
+    it.youtube = { visualizacoes: st.visualizacoes, curtidas: st.curtidas, comentarios: st.comentarios, atualizadoEm: hojeISO(), link: link };
+    trocar(htmlYoutubeBox(it, link));
+  }).catch(function () { if (S.dialogo && S.dialogo.item === it) trocar(htmlYoutubeBox(it, link, "erro")); });
 }
 function resumoYoutube(y) { if (!y) return ""; var p = [fmtNum(y.visualizacoes) + " visualizações"]; if (y.curtidas != null) p.push(fmtNum(y.curtidas) + " curtidas"); if (y.comentarios != null) p.push(fmtNum(y.comentarios) + " comentários"); return p.join(" · ") + (y.atualizadoEm ? " (em " + fmtDataCurta(y.atualizadoEm) + ")" : ""); }
 function fmtMoeda(n) { if (n == null || isNaN(n)) return ""; return Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
@@ -524,7 +551,7 @@ function painelProduto(m, a, p) {
   var corpo;
   if (p === "brand") {
     var brands = S.d.brands.filter(function (b) { return b.marcaId === m.id && (!a || !b.autorizacaoId || b.autorizacaoId === a.id); }).sort(function (x, y) { return indiceEtapa(x.etapa) - indiceEtapa(y.etapa); });
-    corpo = brands.length ? '<div class="tabela-wrap"><table class="tabela">' + brands.map(function (b) { var e = byId(ETAPAS_BRAND, b.etapa); var d = diasParado(b); return '<tr class="clicavel" data-acao="abrir-brand" data-id="' + attr(b.id) + '"><td><strong>' + esc(b.titulo) + "</strong>" + (b.apresentador ? '<div class="small muted">' + esc(b.apresentador) + "</div>" : "") + "</td><td>" + selo(e ? e.nome : b.etapa, b.etapa === "veiculado" ? "ok" : (ETAPAS_COM_CLIENTE[b.etapa] ? "alerta" : "")) + (b.etapa !== "veiculado" && d >= 14 ? ' <span class="small muted">' + d + " d</span>" : "") + '</td><td class="nowrap mono small">' + (b.dataVeiculacao ? fmtData(b.dataVeiculacao) : (b.dataGravacao ? "grav. " + fmtDataCurta(b.dataGravacao) : "")) + "</td><td>" + (b.links && b.links.youtube ? linkExterno(b.links.youtube, "YouTube") : "") + "</td></tr>"; }).join("") + "</table></div>" : '<div class="vazio">Nenhum vídeo de brand nesta autorização.</div>';
+    corpo = brands.length ? '<div class="tabela-wrap"><table class="tabela">' + brands.map(function (b) { var e = byId(ETAPAS_BRAND, b.etapa); var d = diasParado(b); return '<tr class="clicavel" data-acao="abrir-brand" data-id="' + attr(b.id) + '"><td><strong>' + esc(b.titulo) + "</strong>" + (b.apresentador ? '<div class="small muted">' + esc(b.apresentador) + "</div>" : "") + "</td><td>" + selo(e ? e.nome : b.etapa, b.etapa === "veiculado" ? "ok" : (ETAPAS_COM_CLIENTE[b.etapa] ? "alerta" : "")) + (b.etapa !== "veiculado" && d >= 14 ? ' <span class="small muted">' + d + " d</span>" : "") + '</td><td class="nowrap mono small">' + (b.dataVeiculacao ? fmtData(b.dataVeiculacao) : (b.dataGravacao ? "grav. " + fmtDataCurta(b.dataGravacao) : "")) + "</td><td>" + (b.links && b.links.youtube ? linkExterno(b.links.youtube, "YouTube") : "") + (b.youtube ? ' <span class="small muted nowrap">' + fmtNum(b.youtube.visualizacoes) + " views</span>" : "") + "</td></tr>"; }).join("") + "</table></div>" : '<div class="vazio">Nenhum vídeo de brand nesta autorização.</div>';
   } else {
     var ents = S.d.entregas.filter(function (e) { return e.marcaId === m.id && e.produto === p && (!a || e.autorizacaoId === a.id || !e.autorizacaoId); }).sort(function (x, y) { return String(y.data).localeCompare(String(x.data)); });
     var cols = p === "post" ? ["Rede", "Views", "Alcance", "Curtidas"] : p === "email" ? ["Base", "Aberturas", "Cliques"] : p === "banner" ? ["Mês", "Impressões"] : ["Edição", "Páginas", "Formato"];
@@ -787,7 +814,7 @@ function telaBrand() {
   var cab = '<div class="filtros"><div class="busca">' + icone("search") + '<input class="input" id="busca-brand" placeholder="Buscar marca, moto ou apresentador" value="' + attr(S.busca) + '" data-filtro="busca"></div>' +
     select("filtroBrandMarca", opcoesMarcas("Todas as marcas"), S.filtroBrandMarca, 'data-filtro="brandMarca"') +
     '<div class="chips">' + [["todos", "Todos (" + producao.length + ")"], ["cliente", "Com o cliente (" + producao.filter(function (b) { return ETAPAS_COM_CLIENTE[b.etapa]; }).length + ")"], ["nossa", "Na nossa mão (" + producao.filter(function (b) { return !ETAPAS_COM_CLIENTE[b.etapa] && b.etapa !== "data_veiculacao"; }).length + ")"], ["prontos", "Prontos (" + contFase.prontos + ")"]].map(function (o) { return '<button type="button" class="chip' + (bola === o[0] ? " ativo" : "") + '" data-acao="filtro-brand-bola" data-v="' + o[0] + '">' + o[1] + "</button>"; }).join("") + "</div>" +
-    '<div class="chips" style="margin-left:auto"><button type="button" class="chip' + (S.visaoBrand !== "lista" ? " ativo" : "") + '" data-acao="visao-brand" data-v="marca">Por marca</button><button type="button" class="chip' + (S.visaoBrand === "lista" ? " ativo" : "") + '" data-acao="visao-brand" data-v="lista">Lista</button></div>' + (temYoutube() ? botao("Números do YouTube", "", 'data-acao="yt-todos" title="Puxa visualizações, curtidas e comentários de todos os vídeos com link do YouTube"', "refresh") : "") + '</div>' +
+    '<div class="chips" style="margin-left:auto"><button type="button" class="chip' + (S.visaoBrand !== "lista" ? " ativo" : "") + '" data-acao="visao-brand" data-v="marca">Por marca</button><button type="button" class="chip' + (S.visaoBrand === "lista" ? " ativo" : "") + '" data-acao="visao-brand" data-v="lista">Lista</button></div>' + (temYoutube() ? (function () { var hj = hojeISO(); var comLink = S.d.brands.filter(function (b) { return youtubeId(b.links && b.links.youtube); }); var hoje = comLink.filter(function (b) { return b.youtube && b.youtube.atualizadoEm === hj; }).length; return '<span class="small muted" title="Os números atualizam sozinhos uma vez por dia">' + (comLink.length ? "YouTube: " + hoje + " de " + comLink.length + (hoje === comLink.length ? " vídeos atualizados hoje" : " vídeos lidos hoje") : "YouTube ligado · nenhum vídeo com link") + "</span>" + botao("Atualizar agora", "p", 'data-acao="yt-todos" title="Puxa visualizações, curtidas e comentários de todos os vídeos com link do YouTube"', "refresh"); })() : "") + '</div>' +
     '<div class="small muted">' + producao.length + " em produção · " + creditos.length + " crédito" + (creditos.length === 1 ? "" : "s") + " sem tema · " + veiculados.length + " veiculado" + (veiculados.length === 1 ? "" : "s") + "</div>";
   return cab + funil + (S.visaoBrand === "lista" ? brandLista(filtrados, creditos) : brandPorMarca(filtrados, creditos, veiculados, bola));
 }
@@ -1103,7 +1130,7 @@ function fichaBrand(d) {
       '<div class="grid g2">' + campo("Data da gravação", input("dataGravacao", b.dataGravacao, "date")) + campo("Data de veiculação", input("dataVeiculacao", b.dataVeiculacao, "date")) + "</div>" +
       '<div class="grid g2">' + campo("Refações (idas e vindas)", '<div class="contador"><button type="button" data-acao="ref-menos">−</button><span id="ref-n">' + (b.refacoes || 0) + '</span><button type="button" data-acao="ref-mais">+</button></div><input type="hidden" name="refacoes" id="f-refacoes" value="' + (b.refacoes || 0) + '">') + campo("Custo extra (R$)", input("custo", b.custo, "number", 'step="0.01" min="0"'), "Retirada, locação, convidado") + "</div>" +
       '<h3 style="font-size:13px">Links</h3><div class="grid g2">' + campo("Drive (material bruto)", input("link_drive", links.drive, "url")) + campo("YouTube não listado (aprovação)", input("link_naoListado", links.naoListado, "url")) + campo("Vídeo final (YouTube)", input("link_youtube", links.youtube, "url")) + campo("Reels", input("link_reels", links.reels, "url")) + campo("Vídeo em alta (Drive)", input("link_final", links.final, "url")) + campo("Thumb", input("link_thumb", links.thumb, "url")) + "</div>" +
-      (youtubeId(links.youtube) && !novo ? '<div class="alerta-box ' + (b.youtube ? "ok" : "info") + '">' + icone("chart") + '<span class="t">' + (b.youtube ? esc(resumoYoutube(b.youtube)) : (temYoutube() ? "Ainda sem números deste vídeo." : "Números do YouTube: falta a chave da API (veja em Ajustes).")) + "</span>" + (temYoutube() ? botao(b.youtube ? "Atualizar" : "Puxar números", "p", 'data-acao="yt-brand" data-id="' + attr(b.id) + '"', "refresh") : "") + "</div>" : "") +
+      htmlYoutubeBox(b, links.youtube) +
       campo("Observações", textarea("obs", b.obs), "Motivos de remarcação, o que foi o ajuste, quem está com a bola") +
     "</div><div class=\"col\" style=\"gap:14px\">" +
       '<div><h3 style="font-size:13px" class="mb2">Linha do tempo</h3><div class="linha-tempo">' + passos + "</div></div>" +
@@ -1441,8 +1468,11 @@ function guardarBrandDoForm(formEl, b, msg) {
   var f = ler(formEl);
   b.marcaId = f.marcaId; b.autorizacaoId = f.autorizacaoId || null; b.titulo = f.titulo; b.apresentador = f.apresentador; b.local = f.local; b.logistica = f.logistica; b.dataGravacao = f.dataGravacao || b.dataGravacao || null; b.dataVeiculacao = f.dataVeiculacao || b.dataVeiculacao || null; b.refacoes = +f.refacoes || 0; b.custo = num(f.custo); b.obs = f.obs;
   b.links = { drive: f.link_drive, naoListado: f.link_naoListado, youtube: f.link_youtube, reels: f.link_reels, final: f.link_final, thumb: f.link_thumb };
+  if (b.youtube && b.youtube.link && b.youtube.link !== b.links.youtube) delete b.youtube;
+  if (!youtubeId(b.links.youtube)) delete b.youtube;
   if (!b.id) b.id = uid("brand");
-  return API.salvar("brands", b).then(function () { return sincronizarEdicaoDoBrand(b); }).then(function () { toast(msg); S.dialogo.item = clone(b); render(); });
+  var faltaYt = temYoutube() && youtubeId(b.links.youtube) && !(b.youtube && b.youtube.atualizadoEm === hojeISO());
+  return API.salvar("brands", b).then(function () { return sincronizarEdicaoDoBrand(b); }).then(function () { toast(msg); S.dialogo.item = clone(b); render(); if (faltaYt) return atualizarYoutubeBrands([b], true).then(function () { var atual = byId(S.d.brands, b.id); if (S.dialogo && S.dialogo.tipo === "brand" && S.dialogo.item && S.dialogo.item.id === b.id && atual) { S.dialogo.item.youtube = atual.youtube; render(); } }); });
 }
 function aoMudar(ev) {
   var el = ev.target; var filtro = el.getAttribute("data-filtro"); var arq = el.getAttribute("data-acao-arquivo");
@@ -1506,6 +1536,7 @@ function reduzirImagem(file, max) {
 document.addEventListener("click", aoClicar);
 document.addEventListener("submit", aoSubmeter);
 document.addEventListener("input", function (ev) { var f = ev.target.getAttribute && ev.target.getAttribute("data-filtro"); if (f === "busca" || f === "filaDescricao") aoMudar(ev); });
+document.addEventListener("input", function (ev) { if (ev.target && ev.target.name === "link_youtube" && S.dialogo && S.dialogo.tipo === "brand") { clearTimeout(ytTimer); var v = ev.target.value; ytTimer = setTimeout(function () { previaYoutube(v); }, 600); } });
 document.addEventListener("change", function (ev) { var f = ev.target.getAttribute && (ev.target.getAttribute("data-filtro") || ev.target.getAttribute("data-acao-arquivo") || ev.target.getAttribute("data-cota-aut") || ev.target.getAttribute("data-ed-id")); if (f && f !== "busca" && f !== "filaDescricao") aoMudar(ev); });
 var rotaAnterior = rota().caminho;
 window.addEventListener("hashchange", function () { var agora = rota().caminho; if (agora !== rotaAnterior) S.busca = ""; rotaAnterior = agora; S.gavetaAberta = false; render(); });
@@ -1544,6 +1575,8 @@ API.carregar().then(function (d) {
   S.d = d; S.pronto = true;
   if (API.onChange) API.onChange(function () { S.d = API.exportar(); render(); });
   render();
+  // YouTube: uma vez por dia, quem abrir primeiro atualiza os vídeos que ainda não foram lidos hoje
+  if (temYoutube()) setTimeout(function () { var hj = hojeISO(); var pend = S.d.brands.filter(function (b) { return youtubeId(b.links && b.links.youtube) && !(b.youtube && b.youtube.atualizadoEm === hj); }); if (pend.length) atualizarYoutubeBrands(pend, true); }, 2500);
   if (window.Tutorial && !window.Tutorial.jaViu()) setTimeout(window.Tutorial.iniciar, 600);
 }).catch(function (e) { S.erro = "Não consegui carregar os dados: " + e.message; render(); });
 window.DRC = { S: S, get API() { return API; }, consumo: consumo, render: render };
