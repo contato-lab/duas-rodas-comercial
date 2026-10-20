@@ -3,8 +3,9 @@
 // Roda no GitHub Actions (ver .github/workflows/robo-drive.yml), de hora em hora.
 //
 // Precisa de:
-//   GOOGLE_SERVICE_ACCOUNT  JSON da conta de serviço do projeto comercial-duas-rodas (segredo do GitHub).
-//                           A pasta Comercial tem que estar compartilhada com o e-mail dessa conta (leitor).
+//   Identidade: o workflow se autentica no Google sem chave (Workload Identity Federation) como a conta
+//                           firebase-adminsdk-fbsvc@comercial-duas-rodas.iam.gserviceaccount.com.
+//                           A pasta Comercial tem que estar compartilhada com esse e-mail (leitor).
 //   DRIVE_PASTA_ID          (opcional) id da pasta Comercial. Sem ele, o robô procura uma pasta chamada
 //                           "Comercial" entre as compartilhadas com a conta.
 //   DIAS_INICIAIS           (opcional) na primeira rodada, só olha arquivos alterados nos últimos N dias (padrão 30).
@@ -12,12 +13,21 @@
 const { google } = require("googleapis");
 const admin = require("firebase-admin");
 
+// Dois jeitos de se identificar: (a) sem chave, pelo GitHub (Workload Identity Federation, configurado em
+// .github/workflows/robo-drive.yml, que deixa as credenciais em GOOGLE_APPLICATION_CREDENTIALS); (b) com o JSON
+// de uma conta de serviço no segredo GOOGLE_SERVICE_ACCOUNT, se um dia a organização liberar chaves.
+const PROJETO = process.env.GOOGLE_CLOUD_PROJECT || "comercial-duas-rodas";
 const credenciais = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT || "null");
-if (!credenciais) { console.error("Falta o segredo GOOGLE_SERVICE_ACCOUNT."); process.exit(1); }
-
-admin.initializeApp({ credential: admin.credential.cert(credenciais), projectId: credenciais.project_id });
+const ESCOPOS = ["https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/datastore", "https://www.googleapis.com/auth/cloud-platform"];
+let auth;
+if (credenciais) {
+  admin.initializeApp({ credential: admin.credential.cert(credenciais), projectId: credenciais.project_id });
+  auth = new google.auth.GoogleAuth({ credentials: credenciais, scopes: ESCOPOS });
+} else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  admin.initializeApp({ credential: admin.credential.applicationDefault(), projectId: PROJETO });
+  auth = new google.auth.GoogleAuth({ scopes: ESCOPOS });
+} else { console.error("Sem credencial: configure a identidade do GitHub (workflow) ou o segredo GOOGLE_SERVICE_ACCOUNT."); process.exit(1); }
 const db = admin.firestore();
-const auth = new google.auth.GoogleAuth({ credentials: credenciais, scopes: ["https://www.googleapis.com/auth/drive.readonly"] });
 const drive = google.drive({ version: "v3", auth });
 
 const PASTA = "application/vnd.google-apps.folder";
