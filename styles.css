@@ -478,3 +478,4 @@ html[data-tema="escuro"] .ano-cel.cheia.post{background:#1E3A8A;color:#BFDBFE}ht
 .yt-box:empty{display:none}
 .yt-box .alerta-box{align-items:center}
 .yt-box .alerta-box .btn{margin-left:auto;flex:none}
+.brand-mais{align-self:flex-start;margin-top:-4px}

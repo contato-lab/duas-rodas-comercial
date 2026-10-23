@@ -835,7 +835,11 @@ function brandPorMarca(filtrados, creditos, veiculados, bola) {
     var cred = g.cred.length ? '<div class="credito-linha' + (sit.id === "vencida" ? " erro" : "") + '"><span>' + g.cred.length + " crédito" + (g.cred.length > 1 ? "s" : "") + " sem tema definido" + (sit.id === "vencida" ? " · contrato vencido" : "") + (sit.ultimaCobranca ? " · cobrado há " + diasEntre(sit.ultimaCobranca, hoje) + " d" : "") + '</span><span class="row">' + botao("Cobrar tema", "p", 'data-acao="nova-cobranca-marca" data-id="' + attr(mid) + '" data-produto="brand"', "bell") + botao("Iniciar um", "p", 'data-acao="abrir-brand" data-id="' + attr(g.cred[0].id) + '"', "arrow-right") + "</span></div>" : "";
     g.prod.sort(function (a, b) { return (ETAPAS_COM_CLIENTE[b.etapa] ? 1 : 0) - (ETAPAS_COM_CLIENTE[a.etapa] ? 1 : 0) || diasParado(b) - diasParado(a) || indiceEtapa(b.etapa) - indiceEtapa(a.etapa); });
     return '<div class="card marca-card brand-card" style="cursor:default;transform:none"><div class="row between"><a href="#/marcas/' + mid + '" class="nome" style="text-decoration:none">' + esc(nomeMarca(mid)) + "</a>" + (comCliente.length ? selo(comCliente.length + " com o cliente" + (maisParado >= 14 ? " · " + maisParado + " d" : ""), maisParado >= 30 ? "erro" : "alerta") : (g.prod.length ? selo(g.prod.length + " em produção", "info") : (g.cred.length ? selo("só créditos") : selo("Tudo veiculado", "ok")))) + "</div>" + cota +
-      (g.prod.length ? '<div class="brand-lista">' + g.prod.map(function (b) { return linhaBrand(b, false); }).join("") + "</div>" : "") + cred +
+      (g.prod.length ? (function () {
+        var LIM = 5; var todos = S.brandMaisAberto && S.brandMaisAberto[mid]; var vis = todos ? g.prod : g.prod.slice(0, LIM); var resto = g.prod.length - LIM;
+        return '<div class="brand-lista">' + vis.map(function (b) { return linhaBrand(b, false); }).join("") + "</div>" +
+          (resto > 0 ? '<button type="button" class="btn p fantasma brand-mais" data-acao="brand-mais" data-id="' + attr(mid) + '">' + icone(todos ? "chevron-left" : "chevron-right") + (todos ? "Mostrar menos" : "Ver mais " + resto + " vídeo" + (resto > 1 ? "s" : "")) + "</button>" : "");
+      })() : "") + cred +
       '<div class="row between" style="margin-top:auto">' + (g.veic.length ? '<button type="button" class="btn p fantasma" data-acao="brand-veic" data-id="' + attr(mid) + '">' + icone(aberto ? "chevron-left" : "chevron-right") + (aberto ? "Esconder veiculados" : g.veic.length + " veiculado" + (g.veic.length > 1 ? "s" : "")) + "</button>" : "<span></span>") + botao("Novo brand", "p", 'data-acao="novo-brand" data-marca="' + attr(mid) + '"', "plus") + "</div>" +
       (aberto ? '<div class="brand-lista">' + g.veic.sort(function (a, b) { return String(b.dataVeiculacao || "").localeCompare(String(a.dataVeiculacao || "")); }).map(function (b) { return linhaBrand(b, false); }).join("") + "</div>" : "") + "</div>";
   }).join("") + "</div>";
@@ -1420,6 +1424,7 @@ function aoClicar(ev) {
     case "filtro-brand-bola": S.filtroBrandBola = S.filtroBrandBola === v && FASES_BRAND.some(function (f) { return f.id === v; }) ? "todos" : v; return render();
     case "brand-avancar-rapido": return avancarBrandRapido(id);
     case "brand-cobrar-rapido": { var bc = byId(S.d.brands, id); S.dialogo = { tipo: "cobranca-brand", brandId: id }; return render(); }
+    case "brand-mais": S.brandMaisAberto = S.brandMaisAberto || {}; S.brandMaisAberto[id] = !S.brandMaisAberto[id]; return render();
     case "brand-veic": S.brandVeicAberto = S.brandVeicAberto || {}; S.brandVeicAberto[id] = !S.brandVeicAberto[id]; return render();
     case "nova-marca": return abrirMarcaForm(null);
     case "editar-marca": return abrirMarcaForm(marca(id));
