@@ -29,7 +29,7 @@ jobs:
         with:
           node-version: 20
       - name: Instalar bibliotecas
-        run: npm install --no-save --no-audit --no-fund googleapis@144 @google-cloud/firestore@7
+        run: npm install --no-save --no-audit --no-fund googleapis@144 @google-cloud/firestore@7 @anthropic-ai/sdk@1
       - name: Varrer a pasta Comercial e lançar na fila
         run: node robo-drive.js
         env:
