@@ -6,6 +6,8 @@
 //   Identidade: o workflow se autentica no Google sem chave (Workload Identity Federation) como a conta
 //                           firebase-adminsdk-fbsvc@comercial-duas-rodas-lime.iam.gserviceaccount.com.
 //                           A pasta Comercial tem que estar compartilhada com esse e-mail (leitor).
+//                           Arquivos anexados pelo site (Apps Script em apps-script/) já entram na fila com o item
+//                           e são pulados aqui pelo driveId.
 //   DRIVE_PASTA_ID          (opcional) id da pasta Comercial. Sem ele, o robô procura uma pasta chamada
 //                           "Comercial" entre as compartilhadas com a conta.
 //   DIAS_INICIAIS           (opcional) na primeira rodada, só olha arquivos alterados nos últimos N dias (padrão 30).
@@ -29,6 +31,34 @@ if (credenciais) {
   db = new Firestore({ projectId: PROJETO });
 } else { console.error("Sem credencial: configure a identidade do GitHub (workflow) ou o segredo GOOGLE_SERVICE_ACCOUNT."); process.exit(1); }
 const drive = google.drive({ version: "v3", auth });
+
+// ---- leitura com o Claude (opcional: só roda se a chave existir no Secret Manager) ----
+let ia = null, claude = null;
+async function prepararIA() {
+  try {
+    ia = require("./functions/ia");
+    const c = await auth.getClient();
+    const r = await c.request({ url: `https://secretmanager.googleapis.com/v1/projects/${PROJETO}/secrets/ANTHROPIC_API_KEY/versions/latest:access` });
+    const chave = Buffer.from(r.data.payload.data, "base64").toString("utf8").trim();
+    claude = ia.cliente(chave);
+    console.log("Leitura com IA ligada.");
+  } catch (e) { console.log("Leitura com IA desligada: " + (e.message || e)); claude = null; }
+}
+const MAX_IA = 25; // arquivos lidos com IA por rodada
+async function baixarConteudo(a) {
+  const mime = a.mimeType || ""; const tam = +a.size || 0;
+  if (mime === "application/vnd.google-apps.document") {
+    const r = await drive.files.export({ fileId: a.id, mimeType: "text/plain" }, { responseType: "arraybuffer" });
+    return { data: Buffer.from(r.data).toString("base64"), mime: "text/plain" };
+  }
+  const ok = mime === "application/pdf" || /^image\/(jpeg|png|gif|webp)$/.test(mime) || /^text\/|html/.test(mime);
+  if (!ok) return null;
+  const limite = mime === "application/pdf" ? 20e6 : (/^image\//.test(mime) ? 4.5e6 : 2e6);
+  if (tam && tam > limite) return null;
+  const r = await drive.files.get({ fileId: a.id, alt: "media", supportsAllDrives: true }, { responseType: "arraybuffer" });
+  return { data: Buffer.from(r.data).toString("base64"), mime };
+}
+const CHECK_IA = { post: ["arte", "legenda", "link"], email: ["html", "assunto", "link"], banner: ["link"], revista: ["pdf"], brand: [] };
 
 const PASTA = "application/vnd.google-apps.folder";
 const CAMPOS = "nextPageToken, files(id, name, mimeType, modifiedTime, webViewLink, size, parents)";
@@ -101,7 +131,9 @@ function acharMarca(marcas, nomePasta) {
   return cands.length === 1 ? cands[0] : (cands.find(x => normalizar(x.nome).startsWith(alvo)) || null);
 }
 
+let lidosIA = 0;
 async function main() {
+  await prepararIA();
   const inicio = new Date();
   const estadoRef = db.collection("robo").doc("drive");
   const estado = (await estadoRef.get()).data() || {};
@@ -110,7 +142,8 @@ async function main() {
   const raiz = await acharPastaRaiz();
   const [marcasSnap, filaSnap] = await Promise.all([db.collection("marcas").get(), db.collection("fila").get()]);
   const marcas = marcasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const jaNaFila = new Map(); filaSnap.docs.forEach(d => { const f = d.data(); if (f.driveId) jaNaFila.set(f.driveId, { id: d.id, ...f }); });
+  const jaNaFila = new Map(); const anexados = new Set();
+  filaSnap.docs.forEach(d => { const f = d.data(); if (f.driveId) jaNaFila.set(f.driveId, { id: d.id, ...f }); (f.anexos || []).forEach(x => { if (x.driveId) anexados.add(x.driveId); }); });
 
   const arquivos = await varrer(raiz);
   console.log(`Pasta ${raiz.name}: ${arquivos.length} arquivos, ${marcas.length} marcas, ${jaNaFila.size} já lançados.`);
@@ -118,6 +151,7 @@ async function main() {
   let novos = 0, atualizados = 0, semMarca = 0;
   for (const a of arquivos) {
     const modificado = new Date(a.modifiedTime);
+    if (anexados.has(a.id)) continue; // anexado pelo site num item da fila: já está lá
     const existente = jaNaFila.get(a.id);
     if (existente) {
       // arquivo trocado depois de lançado: anota, sem mexer no que o time já editou
@@ -138,7 +172,21 @@ async function main() {
       status: "aguardando", origem: "drive", checklist: checklistInicial(produto, a.mimeType || "", a.name), criadoEm: hojeISO(),
       driveId: a.id, driveNome: a.name, driveMime: a.mimeType || "", driveModificadoEm: a.modifiedTime, drivePasta: a.caminho.join(" / "), roboEm: inicio.toISOString()
     };
-    await db.collection("fila").doc(id).set(item); novos++; if (!marca) semMarca++;
+    if (claude && lidosIA < MAX_IA) {
+      try {
+        const conteudo = await baixarConteudo(a).catch(() => null);
+        const { dados: r } = await ia.classificarMaterial(claude, { arquivo: conteudo && conteudo.data, mime: conteudo && conteudo.mime, nome: a.name, pasta: a.caminho.join(" / "), marcas: marcas.map((m) => m.nome) });
+        lidosIA++;
+        item.produto = r.produto; item.descricao = r.descricao || item.descricao;
+        if (!marca && r.marca) { const mm = marcas.find((m) => m.nome === r.marca); if (mm) { item.marcaId = mm.id; item.obs = item.obs.replace(" (marca não reconhecida, escolha na ficha)", " (marca reconhecida pela IA, confira)"); } }
+        const ck = {}; (CHECK_IA[r.produto] || []).forEach((k) => { if (r[k] != null) ck[k] = !!r[k]; });
+        if (r.produto === "banner") ck.pecas = true; if (r.produto === "brand") ck.material = true;
+        item.checklist = Object.assign(checklistInicial(r.produto, a.mimeType || "", a.name), ck);
+        if (r.falta && r.falta.length) item.obs += "\nFalta, segundo a IA: " + r.falta.join("; ") + ".";
+        item.lidoComIA = true;
+      } catch (e) { console.warn("IA não leu", a.name, e.message); }
+    }
+    await db.collection("fila").doc(id).set(item); novos++; if (!item.marcaId) semMarca++;
     console.log(`+ ${item.descricao} (${produto}) → ${marca ? marca.nome : "sem marca"} [${a.caminho.join(" / ")}]`);
   }
   await estadoRef.set({ ultimaVarredura: inicio.toISOString(), pasta: raiz.name, pastaId: raiz.id, arquivos: arquivos.length, novos, atualizados, semMarca, erro: null }, { merge: true });

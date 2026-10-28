@@ -17,3 +17,8 @@ window.FIREBASE_CONFIG = {
 // Serve só para LER visualizações, curtidas e comentários de vídeos públicos ou não listados.
 // Enquanto for null, os números do YouTube ficam para digitar à mão.
 window.YOUTUBE_KEY = "AIzaSyArSyfERbErUj2fY0gjEoN9kW8tHS3QtxQ";
+
+// Ponte com o Drive da Lime: Apps Script "Ponte Drive - Comercial Duas Rodas" na conta performance@limeag.com
+// (código em apps-script/Codigo.gs). Os anexos da fila vão para DUAS RODAS / MATERIAIS / <marca>.
+// O script só aceita quem chega com o login do Firebase desta plataforma (sem senha no código).
+window.DRIVE_PONTE = { url: "https://script.google.com/macros/s/AKfycbzJNQ6_iQbPKqYCuhAIRrAyQS930oq7JCDACj3TB5YFD4TDXNOYj18v4cDLNbJbnDXQ/exec" };

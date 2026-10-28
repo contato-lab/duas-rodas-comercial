@@ -204,8 +204,6 @@ function criarApiLocal() {
     apagar: function (col, id) { dados[col] = dados[col].filter(function (x) { return x.id !== id; }); gravar(); return Promise.resolve(); },
     substituirTudo: function (novo) { dados = novo; COLECOES.forEach(function (c) { if (!dados[c]) dados[c] = []; }); gravar(); return Promise.resolve(dados); },
     ia: function () { return Promise.reject(new Error("A leitura com IA precisa do Firebase ligado.")); },
-    enviarArquivo: function () { return Promise.reject(new Error("Anexar arquivo precisa do Firebase ligado.")); },
-    apagarArquivo: function () { return Promise.resolve(); },
     exportar: function () { return clone(dados); }
   };
 }
@@ -241,19 +239,7 @@ function criarApiFirebase(cfg) {
     },
     exportar: function () { return clone(dados); },
     onChange: function (cb) { aoMudar = cb; },
-    /* arquivos no Firebase Storage (bucket do projeto). Devolve o link de download. */
-    enviarArquivo: function (caminho, file, aoProgresso) {
-      return import(base + "firebase-storage.js").then(function (st) {
-        var ref = st.ref(st.getStorage(app), caminho);
-        var tarefa = st.uploadBytesResumable(ref, file, { contentType: file.type || "application/octet-stream" });
-        return new Promise(function (ok, erro) {
-          tarefa.on("state_changed", function (snap) { if (aoProgresso && snap.totalBytes) aoProgresso(snap.bytesTransferred / snap.totalBytes); }, erro, function () { st.getDownloadURL(tarefa.snapshot.ref).then(ok, erro); });
-        });
-      });
-    },
-    apagarArquivo: function (caminho) {
-      return import(base + "firebase-storage.js").then(function (st) { return st.deleteObject(st.ref(st.getStorage(app), caminho)); }).catch(function () {});
-    },
+    token: function () { return import(base + "firebase-auth.js").then(function (m) { var u = m.getAuth(app).currentUser; return u ? u.getIdToken() : null; }); },
     ia: function (pedido) {
       return import(base + "firebase-functions.js").then(function (m) {
         var fns = m.getFunctions(app, "southamerica-east1");
@@ -1296,25 +1282,45 @@ function campoAnexos(d, f) {
   anexosDoDialogo(d, f);
   return '<div class="campo"><label>Arquivos</label><label class="drop anexos-drop">' + icone("paperclip", "ic") + " Anexar arquivos (arte, vídeo, legenda, PDF). Clique ou arraste aqui. Pode ser mais de um." +
     '<input type="file" multiple class="sr-only" data-acao-arquivo="anexo-fila"></label><div class="anexos" id="anexos-fila">' + htmlAnexos(d) + "</div>" +
-    '<span class="ajuda">Fica guardado no Firebase da plataforma, junto com este item. Até 500 MB por arquivo.</span></div>';
+    '<span class="ajuda">Vai para a pasta da marca em DUAS RODAS / MATERIAIS, no Drive da Lime. Até 500 MB por arquivo.</span></div>';
 }
 function atualizarAnexosNaTela() { var c = document.getElementById("anexos-fila"); if (c && S.dialogo) c.innerHTML = htmlAnexos(S.dialogo); }
+/* ponte com o Drive da Lime (Apps Script da conta performance): cria a pasta da marca em MATERIAIS e abre o envio */
+function ponteDrive(acao, dados) {
+  var cfg = window.DRIVE_PONTE || {};
+  if (!cfg.url) return Promise.reject(new Error("a ligação com o Drive ainda não foi configurada"));
+  return (API && API.token ? API.token() : Promise.resolve(null)).then(function (token) {
+    return fetch(cfg.url, { method: "POST", body: JSON.stringify(Object.assign({ acao: acao, token: token }, dados || {})) });
+  }).then(function (r) { return r.json(); }).then(function (j) { if (j.erro) throw new Error(j.erro); return j; });
+}
+function enviarParaDrive(marcaNome, file, aoProgresso) {
+  return ponteDrive("sessao", { marca: marcaNome, nome: file.name, tipo: file.type || "application/octet-stream", tamanho: file.size, origem: location.origin }).then(function (s) {
+    return new Promise(function (ok, erro) {
+      var x = new XMLHttpRequest(); x.open("PUT", s.url);
+      x.upload.onprogress = function (ev) { if (ev.lengthComputable && aoProgresso) aoProgresso(ev.loaded / ev.total); };
+      x.onload = function () { if (x.status >= 200 && x.status < 300) { try { var r = JSON.parse(x.responseText); r.pastaUrl = s.pastaUrl; ok(r); } catch (e) { erro(new Error("resposta estranha do Drive")); } } else erro(new Error("o Drive respondeu " + x.status)); };
+      x.onerror = function () { erro(new Error("a conexão caiu no meio do envio")); };
+      x.send(file);
+    });
+  });
+}
 function enviarAnexosFila(files) {
   var d = S.dialogo; if (!d || d.tipo !== "fila" || !files || !files.length) return;
-  if (!API || API.tipo !== "firebase") { toast("Anexar arquivo precisa do Firebase ligado.", true); return; }
+  var form = document.querySelector('form[data-form="fila"]'); var mid = form && form.marcaId ? form.marcaId.value : (d.item && d.item.marcaId);
+  if (!mid) { toast("Escolha a marca antes de anexar. O arquivo vai para a pasta dela no Drive.", true); return; }
+  var nomeM = nomeMarca(mid);
   anexosDoDialogo(d, d.item); d.enviando = d.enviando || [];
-  var id = (d.item && d.item.id) || d.anexoId || (d.anexoId = uid("fila"));
   Array.prototype.forEach.call(files, function (file) {
-    if (file.size > 500 * 1048576) { toast(file.name + " passa de 500 MB. Mande pelo link do Drive.", true); return; }
+    if (file.size > 500 * 1048576) { toast(file.name + " passa de 500 MB. Suba direto na pasta da marca no Drive.", true); return; }
     var env = { nome: file.name, pct: 0 }; d.enviando.push(env); atualizarAnexosNaTela();
-    var caminho = "fila/" + id + "/" + Date.now() + "-" + file.name.replace(/[\/#?\[\]*]/g, "_");
-    API.enviarArquivo(caminho, file, function (p) { env.pct = p; atualizarAnexosNaTela(); }).then(function (url) {
+    enviarParaDrive(nomeM, file, function (p) { env.pct = p; atualizarAnexosNaTela(); }).then(function (r) {
       d.enviando = d.enviando.filter(function (x) { return x !== env; });
-      d.anexos.push({ nome: file.name, tamanho: file.size, tipo: file.type || "", url: url, caminho: caminho, enviadoEm: hojeISO() });
+      d.anexos.push({ nome: file.name, tamanho: file.size, tipo: file.type || "", url: r.webViewLink || ("https://drive.google.com/file/d/" + r.id + "/view"), driveId: r.id, pastaUrl: r.pastaUrl || "", marca: nomeM, enviadoEm: hojeISO() });
       if (S.dialogo === d) atualizarAnexosNaTela();
     }).catch(function (e) { env.erro = true; atualizarAnexosNaTela(); toast("Não subiu " + file.name + ": " + e.message, true); });
   });
 }
+function tirarDoDrive(a) { if (a && a.driveId) ponteDrive("lixeira", { id: a.driveId }).catch(function () {}); }
 function formAlocar(d) {
   var f = d.item;
   return '<form class="dialogo" data-form="alocar">' + cabDialogo("Dar data: " + nomeMarca(f.marcaId), f.descricao) + '<div class="corpo">' +
@@ -1504,9 +1510,9 @@ function aoSubmeter(ev) {
   }
   if (tipo === "fila") {
     if (S.dialogo.enviando && S.dialogo.enviando.some(function (x) { return !x.erro; })) { toast("Espere os arquivos terminarem de subir.", true); return; }
-    var antes = (item.anexos || []).map(function (a) { return a.caminho; });
+    var antes = item.anexos || [];
     item.anexos = clone(S.dialogo.anexos || item.anexos || []);
-    antes.filter(function (c) { return !item.anexos.some(function (a) { return a.caminho === c; }); }).forEach(function (c) { API.apagarArquivo(c); });
+    antes.filter(function (a) { return !item.anexos.some(function (b) { return b.driveId === a.driveId; }); }).forEach(tirarDoDrive);
     item.id = item.id || S.dialogo.anexoId || uid("fila"); item.marcaId = f.marcaId; item.produto = f.produto; item.descricao = f.descricao; item.linkMaterial = f.linkMaterial; item.linkDestino = f.linkDestino; item.dataPedida = f.dataPedida || null; item.urgencia = f.urgencia; item.por = f.por; item.obs = f.obs; item.origem = f.origem || "outro"; item.status = item.status || "aguardando"; item.criadoEm = item.criadoEm || hojeISO();
     item.checklist = {}; (CHECKLIST[item.produto] || []).forEach(function (it) { item.checklist[it[0]] = !!form["chk_" + it[0]] && form["chk_" + it[0]].checked; });
     if (item.linkDestino && item.checklist.link === false && !form.chk_link.checked) item.checklist.link = true;
@@ -1593,7 +1599,7 @@ function aoClicar(ev) {
     case "tirar-imagem": S.dialogo.item = S.dialogo.item || {}; S.dialogo.item = Object.assign(lerFormParaItem(el.closest("form")), { imagem: "" }); return render();
     case "novo-fila": S.dialogo = { tipo: "fila", item: null }; return render();
     case "editar-fila": S.dialogo = { tipo: "fila", item: clone(byId(S.d.fila, id)) }; return render();
-    case "apagar-fila": return confirmar("Excluir da fila", "Tirar este material da fila? Os arquivos anexados também são apagados.", "Excluir", function () { var fa = byId(S.d.fila, id); ((fa && fa.anexos) || []).forEach(function (a) { API.apagarArquivo(a.caminho); }); apagar("fila", id, "Removido da fila."); });
+    case "apagar-fila": return confirmar("Excluir da fila", "Tirar este material da fila? Os arquivos anexados também são apagados.", "Excluir", function () { var fa = byId(S.d.fila, id); ((fa && fa.anexos) || []).forEach(tirarDoDrive); apagar("fila", id, "Removido da fila."); });
     case "tirar-anexo": if (S.dialogo && S.dialogo.anexos) { S.dialogo.anexos.splice(+el.getAttribute("data-i"), 1); atualizarAnexosNaTela(); } return;
     case "alocar-fila": S.dialogo = { tipo: "alocar", item: clone(byId(S.d.fila, id)) }; return render();
     case "novo-edicao": S.dialogo = { tipo: "edicao", item: null }; return render();
