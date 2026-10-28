@@ -1,0 +1,11 @@
+{
+  "name": "comercial-duas-rodas-functions",
+  "private": true,
+  "main": "index.js",
+  "engines": { "node": "20" },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.2.0",
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^6.1.0"
+  }
+}
