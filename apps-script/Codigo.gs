@@ -29,9 +29,18 @@ function loginValido_(token) {
   if (ok) cache.put(k, '1', 600);
   return ok;
 }
-var PRODUTOS_PASTA = { post: 'Posts', email: 'E-mail marketing', banner: 'Banner', revista: 'Revista', brand: 'Brand (vídeo)' };
+// Mesmos nomes do campo Produto da plataforma. NOMES_ANTIGOS: pastas criadas antes com outro nome, renomeadas sozinhas.
+var PRODUTOS_PASTA = { post: 'Posts publicidade', brand: 'Brand (YouTube)', email: 'E-mail marketing', revista: 'Páginas de revista', banner: 'Banner no site' };
+var NOMES_ANTIGOS = { post: 'Posts', brand: 'Brand (vídeo)', revista: 'Revista', banner: 'Banner' };
 function subpasta_(pai, nome) { var it = pai.getFoldersByName(nome); return it.hasNext() ? it.next() : pai.createFolder(nome); }
-function pastaDestino_(marca, produto) { var m = pastaDaMarca_(marca); return PRODUTOS_PASTA[produto] ? subpasta_(m, PRODUTOS_PASTA[produto]) : m; }
+function pastaDoProduto_(m, produto) {
+  var nome = PRODUTOS_PASTA[produto]; if (!nome) return m;
+  var it = m.getFoldersByName(nome); if (it.hasNext()) return it.next();
+  var antigo = NOMES_ANTIGOS[produto] && m.getFoldersByName(NOMES_ANTIGOS[produto]);
+  if (antigo && antigo.hasNext()) { var f = antigo.next(); f.setName(nome); return f; }
+  return m.createFolder(nome);
+}
+function pastaDestino_(marca, produto) { return pastaDoProduto_(pastaDaMarca_(marca), produto); }
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 
 function doPost(e) {
@@ -67,10 +76,11 @@ function doPost(e) {
   } catch (err) { return json_({ erro: String(err && err.message || err) }); }
 }
 
-/** Rode uma vez pelo editor para criar as pastas de todas as marcas. */
+/** Rode pelo editor para criar a pasta de cada marca com as 5 subpastas de produto. Pode rodar de novo sem duplicar. */
 function criarPastas() {
-  MARCAS.forEach(function (n) { pastaDaMarca_(n); });
-  Logger.log(MARCAS.length + ' pastas conferidas em MATERIAIS.');
+  var n = 0;
+  MARCAS.forEach(function (nome) { var m = pastaDaMarca_(nome); Object.keys(PRODUTOS_PASTA).forEach(function (p) { pastaDoProduto_(m, p); n++; }); });
+  Logger.log(MARCAS.length + ' marcas e ' + n + ' subpastas conferidas em MATERIAIS.');
 }
 
 /* ============ organizador com IA ============
