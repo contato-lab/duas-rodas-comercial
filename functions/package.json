@@ -2,7 +2,7 @@
   "name": "comercial-duas-rodas-functions",
   "private": true,
   "main": "index.js",
-  "engines": { "node": "20" },
+  "engines": { "node": "22" },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.2.0",
     "firebase-admin": "^12.7.0",
