@@ -1282,7 +1282,7 @@ function campoAnexos(d, f) {
   anexosDoDialogo(d, f);
   return '<div class="campo"><label>Arquivos</label><label class="drop anexos-drop">' + icone("paperclip", "ic") + " Anexar arquivos (arte, vídeo, legenda, PDF). Clique ou arraste aqui. Pode ser mais de um." +
     '<input type="file" multiple class="sr-only" data-acao-arquivo="anexo-fila"></label><div class="anexos" id="anexos-fila">' + htmlAnexos(d) + "</div>" +
-    '<span class="ajuda">Vai para a pasta da marca em DUAS RODAS / MATERIAIS, no Drive da Lime. Até 500 MB por arquivo.</span></div>';
+    '<span class="ajuda">Vai para DUAS RODAS / MATERIAIS / marca / produto, no Drive da Lime. Até 500 MB por arquivo.</span></div>';
 }
 function atualizarAnexosNaTela() { var c = document.getElementById("anexos-fila"); if (c && S.dialogo) c.innerHTML = htmlAnexos(S.dialogo); }
 /* ponte com o Drive da Lime (Apps Script da conta performance): cria a pasta da marca em MATERIAIS e abre o envio */
@@ -1293,8 +1293,8 @@ function ponteDrive(acao, dados) {
     return fetch(cfg.url, { method: "POST", body: JSON.stringify(Object.assign({ acao: acao, token: token }, dados || {})) });
   }).then(function (r) { return r.json(); }).then(function (j) { if (j.erro) throw new Error(j.erro); return j; });
 }
-function enviarParaDrive(marcaNome, file, aoProgresso) {
-  return ponteDrive("sessao", { marca: marcaNome, nome: file.name, tipo: file.type || "application/octet-stream", tamanho: file.size, origem: location.origin }).then(function (s) {
+function enviarParaDrive(marcaNome, file, aoProgresso, produto) {
+  return ponteDrive("sessao", { marca: marcaNome, produto: produto || "", nome: file.name, tipo: file.type || "application/octet-stream", tamanho: file.size, origem: location.origin }).then(function (s) {
     return new Promise(function (ok, erro) {
       var x = new XMLHttpRequest(); x.open("PUT", s.url);
       x.upload.onprogress = function (ev) { if (ev.lengthComputable && aoProgresso) aoProgresso(ev.loaded / ev.total); };
@@ -1308,12 +1308,12 @@ function enviarAnexosFila(files) {
   var d = S.dialogo; if (!d || d.tipo !== "fila" || !files || !files.length) return;
   var form = document.querySelector('form[data-form="fila"]'); var mid = form && form.marcaId ? form.marcaId.value : (d.item && d.item.marcaId);
   if (!mid) { toast("Escolha a marca antes de anexar. O arquivo vai para a pasta dela no Drive.", true); return; }
-  var nomeM = nomeMarca(mid);
+  var nomeM = nomeMarca(mid); var prodF = form && form.produto ? form.produto.value : (d.item && d.item.produto);
   anexosDoDialogo(d, d.item); d.enviando = d.enviando || [];
   Array.prototype.forEach.call(files, function (file) {
     if (file.size > 500 * 1048576) { toast(file.name + " passa de 500 MB. Suba direto na pasta da marca no Drive.", true); return; }
     var env = { nome: file.name, pct: 0 }; d.enviando.push(env); atualizarAnexosNaTela();
-    enviarParaDrive(nomeM, file, function (p) { env.pct = p; atualizarAnexosNaTela(); }).then(function (r) {
+    enviarParaDrive(nomeM, file, function (p) { env.pct = p; atualizarAnexosNaTela(); }, prodF).then(function (r) {
       d.enviando = d.enviando.filter(function (x) { return x !== env; });
       d.anexos.push({ nome: file.name, tamanho: file.size, tipo: file.type || "", url: r.webViewLink || ("https://drive.google.com/file/d/" + r.id + "/view"), driveId: r.id, pastaUrl: r.pastaUrl || "", marca: nomeM, enviadoEm: hojeISO() });
       if (S.dialogo === d) atualizarAnexosNaTela();
