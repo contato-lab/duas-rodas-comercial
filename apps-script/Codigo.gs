@@ -29,6 +29,9 @@ function loginValido_(token) {
   if (ok) cache.put(k, '1', 600);
   return ok;
 }
+var PRODUTOS_PASTA = { post: 'Posts', email: 'E-mail marketing', banner: 'Banner', revista: 'Revista', brand: 'Brand (vídeo)' };
+function subpasta_(pai, nome) { var it = pai.getFoldersByName(nome); return it.hasNext() ? it.next() : pai.createFolder(nome); }
+function pastaDestino_(marca, produto) { var m = pastaDaMarca_(marca); return PRODUTOS_PASTA[produto] ? subpasta_(m, PRODUTOS_PASTA[produto]) : m; }
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 
 function doPost(e) {
@@ -41,7 +44,7 @@ function doPost(e) {
       return json_({ ok: true, pastas: r });
     }
     if (p.acao === 'sessao') {
-      var pasta = pastaDaMarca_(p.marca);
+      var pasta = pastaDestino_(p.marca, p.produto);
       var tipo = p.tipo || 'application/octet-stream';
       var res = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,webViewLink,size', {
         method: 'post', contentType: 'application/json; charset=UTF-8', muteHttpExceptions: true,
@@ -68,4 +71,65 @@ function doPost(e) {
 function criarPastas() {
   MARCAS.forEach(function (n) { pastaDaMarca_(n); });
   Logger.log(MARCAS.length + ' pastas conferidas em MATERIAIS.');
+}
+
+/* ============ organizador com IA ============
+ * Arquivo solto direto em MATERIAIS (sem pasta) é lido pelo Claude, pela função "ia" da plataforma,
+ * e vai para MATERIAIS / <marca> / <produto>. Sem marca reconhecida, vai para "_Conferir (sem marca)".
+ * Roda sozinho a cada 15 minutos depois de rodar ligarOrganizador() uma vez.
+ */
+var FUNCAO_IA = 'https://southamerica-east1-comercial-duas-rodas-lime.cloudfunctions.net/ia';
+var SITE = 'https://contato-lab.github.io/duas-rodas-comercial/';
+var POR_RODADA = 10;
+
+function tokenDoRobo_() {
+  var props = PropertiesService.getScriptProperties(); var cache = CacheService.getScriptCache();
+  var t = cache.get('tokenRobo'); if (t) return t;
+  var refresh = props.getProperty('refreshRobo'); var r, j;
+  if (refresh) {
+    r = UrlFetchApp.fetch('https://securetoken.googleapis.com/v1/token?key=' + FIREBASE_WEB_KEY, { method: 'post', payload: { grant_type: 'refresh_token', refresh_token: refresh }, headers: { Referer: SITE }, muteHttpExceptions: true });
+    if (r.getResponseCode() === 200) { j = JSON.parse(r.getContentText()); t = j.id_token; props.setProperty('refreshRobo', j.refresh_token); }
+  }
+  if (!t) {
+    r = UrlFetchApp.fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + FIREBASE_WEB_KEY, { method: 'post', contentType: 'application/json', payload: JSON.stringify({ returnSecureToken: true }), headers: { Referer: SITE }, muteHttpExceptions: true });
+    j = JSON.parse(r.getContentText()); if (!j.idToken) throw new Error('não consegui entrar no Firebase: ' + r.getContentText().slice(0, 200));
+    t = j.idToken; props.setProperty('refreshRobo', j.refreshToken);
+  }
+  cache.put('tokenRobo', t, 3000);
+  return t;
+}
+
+function classificar_(arquivo) {
+  var mime = arquivo.getMimeType(); var tam = arquivo.getSize(); var dados = { tipo: 'material', nome: arquivo.getName(), pasta: 'MATERIAIS (arquivo solto)', marcas: MARCAS };
+  try {
+    if (mime === 'application/vnd.google-apps.document') { dados.arquivo = Utilities.base64Encode(arquivo.getAs('text/plain').getBytes()); dados.mime = 'text/plain'; }
+    else if ((mime === 'application/pdf' && tam <= 20e6) || (/^image\/(jpeg|png|gif|webp)$/.test(mime) && tam <= 4.5e6) || (/^text\//.test(mime) && tam <= 2e6)) { dados.arquivo = Utilities.base64Encode(arquivo.getBlob().getBytes()); dados.mime = mime; }
+  } catch (e) { /* sem conteúdo: decide pelo nome */ }
+  var r = UrlFetchApp.fetch(FUNCAO_IA, { method: 'post', contentType: 'application/json', payload: JSON.stringify({ data: dados }), headers: { Authorization: 'Bearer ' + tokenDoRobo_() }, muteHttpExceptions: true });
+  var j = JSON.parse(r.getContentText());
+  if (j.error) throw new Error(j.error.message || JSON.stringify(j.error));
+  return (j.result && j.result.dados) || {};
+}
+
+function organizar() {
+  var raiz = DriveApp.getFolderById(RAIZ); var arquivos = raiz.getFiles(); var n = 0;
+  while (arquivos.hasNext() && n < POR_RODADA) {
+    var a = arquivos.next(); n++;
+    try {
+      var d = classificar_(a);
+      var destino = d.marca && MARCAS.indexOf(d.marca) >= 0 ? pastaDestino_(d.marca, d.produto) : subpasta_(raiz, '_Conferir (sem marca)');
+      var nota = 'Organizado pela IA em ' + Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm') + ': ' + (d.descricao || '') + (d.falta && d.falta.length ? '. Falta: ' + d.falta.join('; ') : '') + '.';
+      try { a.setDescription(nota); } catch (e) {}
+      a.moveTo(destino);
+      Logger.log(a.getName() + ' -> ' + (d.marca || 'sem marca') + ' / ' + (d.produto || ''));
+    } catch (e) { Logger.log('Não organizei ' + a.getName() + ': ' + e.message); }
+  }
+  if (!n) Logger.log('Nenhum arquivo solto em MATERIAIS.');
+}
+
+/** Rode uma vez pelo editor: liga o organizador a cada 15 minutos. */
+function ligarOrganizador() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'organizar') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('organizar').timeBased().everyMinutes(15).create();
+  Logger.log('Organizador ligado: roda a cada 15 minutos.');
 }
