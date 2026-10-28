@@ -47,6 +47,11 @@ function slideEntregues(d) {
   if (!linhas.length) linhas.push(["", "NENHUM MATERIAL NO PERÍODO"]);
   return { descricao: "Materiais entregues no período" + (d.entregas.length || d.brands.length ? "" : " (nenhum)"), html: slideLista(d, "MATERIAIS", "ENTREGUES", linhas) };
 }
+function slideDestaques(d) {
+  if (!d.destaques || !d.destaques.length) return null;
+  return { descricao: "Destaques do período (" + d.destaques.length + ")", html: '<section class="slide lista destaques"><div class="esq"><h1>DESTAQUES<br><b>DO PERÍODO</b></h1><div class="faixa"><span class="riscos"></span><span class="rel">RELATÓRIO <b>' + esc(d.marca.nome) + '</b></span></div></div><div class="div"></div><ul>' +
+    d.destaques.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul></section>" };
+}
 function caixaMetrica(titulo, linhas) { return '<div class="metrica"><span class="rotulo">' + esc(titulo) + "</span><div>" + linhas.map(function (l) { return "<span>" + esc(l) + "</span>"; }).join("") + "</div></div>"; }
 function slidePost(d, e) {
   var m = e.metricas || {}; var esq = [], dir = [];
@@ -89,6 +94,7 @@ function montarDados(d) {
   var slides = [slideCapa(d)];
   var ac = slideAcordados(d); if (ac) slides.push(ac);
   slides.push(slideEntregues(d));
+  var dq = slideDestaques(d); if (dq) slides.push(dq);
   var posts = d.entregas.filter(function (e) { return e.produto === "post"; });
   if (posts.length) { slides.push(slideSecao(d, "POSTS", "PUBLICIDADE")); posts.forEach(function (e) { slides.push(slidePost(d, e)); }); }
   if (d.brands.length) { slides.push(slideSecao(d, "BRANDED", "")); d.brands.forEach(function (b) { slides.push(slideBrand(d, b)); }); }
@@ -118,7 +124,7 @@ var CSS = '@import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&fami
   ".lateral{position:absolute;left:0;top:0;bottom:0;width:120px;background:repeating-linear-gradient(135deg,#fff 0 30px,#000 30px 70px)}.lateral~.faixa{left:230px}.lateral~.tit{left:230px}" +
   ".lista{background:#0d0d0d radial-gradient(ellipse at 30% 50%,#1d1d1d,transparent 60%)}.lista:after{content:'';position:absolute;right:0;top:0;bottom:0;width:110px;background:repeating-linear-gradient(135deg," + VERMELHO + " 0 30px,transparent 30px 68px)}" +
   ".lista .esq{position:absolute;left:230px;top:380px;width:620px}.lista .esq .faixa{position:static;margin-top:36px}.lista .esq .riscos{width:220px;height:30px}.lista .esq .rel{font-size:32px}.lista .esq h1{margin:0;font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:120px;line-height:.95;color:#fff}.lista .esq h1 b{color:" + VERMELHO + ";font-weight:400}.lista .div{position:absolute;left:890px;top:270px;width:3px;height:620px;background:#fff}" +
-  ".lista ul{position:absolute;left:920px;top:380px;margin:0;padding:0;list-style:none;font-family:'Bebas Neue',Impact,sans-serif;font-size:66px;line-height:1.3;color:#fff}.lista li b{color:" + VERMELHO + ";font-weight:400;margin-right:16px}" +
+  ".lista ul{position:absolute;left:920px;top:380px;margin:0;padding:0;list-style:none;font-family:'Bebas Neue',Impact,sans-serif;font-size:66px;line-height:1.3;color:#fff}.lista li b{color:" + VERMELHO + ";font-weight:400;margin-right:16px}.lista.destaques ul{right:170px;top:300px;font-family:Poppins,Arial,sans-serif;font-size:34px;line-height:1.35;font-weight:600}.lista.destaques li{margin-bottom:34px;padding-left:34px;position:relative}.lista.destaques li:before{content:'';position:absolute;left:0;top:14px;width:16px;height:16px;background:" + VERMELHO + "}" +
   ".capa,.secao{background:#fff}.letras{position:absolute;inset:-200px;overflow:hidden;background:linear-gradient(160deg," + VERMELHO + " 0 46%,#fff 46%)}.letras span{position:absolute;font-family:Poppins,sans-serif;font-weight:800;font-style:italic;font-size:900px;line-height:.8;color:#0A0A0A;letter-spacing:-.06em;transform:rotate(-9deg)}.letras .l1{left:-120px;top:-260px}.letras .l2{left:420px;top:560px}" +
   ".capa .caixa{position:absolute;left:560px;top:180px;width:800px;height:720px;background:#0A0A0A;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:60px;box-shadow:0 40px 80px rgba(0,0,0,.35)}.capa .tres{width:220px;height:60px;background:repeating-linear-gradient(115deg,#fff 0 30px,transparent 30px 70px);position:absolute;top:-10px;left:50%;transform:translateX(-50%)}" +
   ".capa h1{margin:0;font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:150px;line-height:1;color:#fff}.capa h2{margin:0;font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:100px;line-height:1;color:" + VERMELHO + ";text-align:center}.capa hr{width:100%;border:0;border-top:3px solid #fff;margin:24px 0}.logo{display:block;width:420px;height:auto}" +

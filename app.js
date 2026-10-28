@@ -92,6 +92,8 @@ var ICONES = {
   "file-up": '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M12 12v6M9 15l3-3 3 3"/>',
   printer: '<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3h12v6"/><rect x="6" y="14" width="12" height="8"/>',
   database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
+  sparkles: '<path d="M9.94 14.06 8 20l-1.94-5.94L0 12l6.06-1.94L8 4l1.94 6.06L16 12Z" transform="translate(2 -1) scale(.85)"/><path d="M19 3v4M17 5h4M19 15v4M17 17h4"/>',
+  paperclip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
   folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>'
 };
 function icone(nome, cls) {
@@ -201,6 +203,9 @@ function criarApiLocal() {
     salvar: function (col, item) { var l = dados[col]; var i = l.findIndex(function (x) { return x.id === item.id; }); if (i >= 0) l[i] = item; else l.push(item); gravar(); return Promise.resolve(item); },
     apagar: function (col, id) { dados[col] = dados[col].filter(function (x) { return x.id !== id; }); gravar(); return Promise.resolve(); },
     substituirTudo: function (novo) { dados = novo; COLECOES.forEach(function (c) { if (!dados[c]) dados[c] = []; }); gravar(); return Promise.resolve(dados); },
+    ia: function () { return Promise.reject(new Error("A leitura com IA precisa do Firebase ligado.")); },
+    enviarArquivo: function () { return Promise.reject(new Error("Anexar arquivo precisa do Firebase ligado.")); },
+    apagarArquivo: function () { return Promise.resolve(); },
     exportar: function () { return clone(dados); }
   };
 }
@@ -235,7 +240,26 @@ function criarApiFirebase(cfg) {
       return Promise.all(ps).then(function () { return dados; });
     },
     exportar: function () { return clone(dados); },
-    onChange: function (cb) { aoMudar = cb; }
+    onChange: function (cb) { aoMudar = cb; },
+    /* arquivos no Firebase Storage (bucket do projeto). Devolve o link de download. */
+    enviarArquivo: function (caminho, file, aoProgresso) {
+      return import(base + "firebase-storage.js").then(function (st) {
+        var ref = st.ref(st.getStorage(app), caminho);
+        var tarefa = st.uploadBytesResumable(ref, file, { contentType: file.type || "application/octet-stream" });
+        return new Promise(function (ok, erro) {
+          tarefa.on("state_changed", function (snap) { if (aoProgresso && snap.totalBytes) aoProgresso(snap.bytesTransferred / snap.totalBytes); }, erro, function () { st.getDownloadURL(tarefa.snapshot.ref).then(ok, erro); });
+        });
+      });
+    },
+    apagarArquivo: function (caminho) {
+      return import(base + "firebase-storage.js").then(function (st) { return st.deleteObject(st.ref(st.getStorage(app), caminho)); }).catch(function () {});
+    },
+    ia: function (pedido) {
+      return import(base + "firebase-functions.js").then(function (m) {
+        var fns = m.getFunctions(app, "southamerica-east1");
+        return m.httpsCallable(fns, "ia", { timeout: 300000 })(pedido).then(function (r) { return r.data; });
+      });
+    }
   };
 }
 var API = null;
@@ -327,7 +351,7 @@ function render() {
     case "/marcas":
       titulo = "Marcas"; sub = S.d.marcas.length + " marcas cadastradas · clique numa marca para abrir a ficha ao lado"; conteudo = telaMarcas(r.id && marca(r.id) ? r.id : ""); acao = botao("Nova marca", "prim", 'data-acao="nova-marca"', "plus");
       break;
-    case "/autorizacoes": titulo = "Autorizações"; sub = S.d.autorizacoes.length + " contratos · " + S.d.autorizacoes.filter(temCotas).length + " com cotas · as quantidades são editáveis direto na tabela"; conteudo = telaAutorizacoes(); acao = botao("Nova autorização", "prim", 'data-acao="nova-aut"', "plus"); break;
+    case "/autorizacoes": titulo = "Autorizações"; sub = S.d.autorizacoes.length + " contratos · " + S.d.autorizacoes.filter(temCotas).length + " com cotas · as quantidades são editáveis direto na tabela"; conteudo = telaAutorizacoes(); acao = '<span class="row">' + botao("Ler contratos com IA", "", 'data-acao="ia-contratos"', "sparkles") + botao("Nova autorização", "prim", 'data-acao="nova-aut"', "plus") + "</span>"; break;
     case "/fila": titulo = "Fila de materiais"; sub = "O que chegou da marca, o que falta nele e em que dia vai sair"; conteudo = telaFila(); acao = botao("Entrou material", "prim", 'data-acao="novo-fila"', "plus"); break;
     case "/brand": titulo = "Brand"; sub = "Produção dos vídeos: quem está com a bola, há quanto tempo e o que fazer agora"; conteudo = telaBrand(); acao = botao("Novo brand", "prim", 'data-acao="novo-brand"', "plus"); break;
     case "/edicao": titulo = "Edição"; sub = "O que o New edita agora, o que voltou com ajuste e o que espera resposta"; conteudo = telaEdicao(); acao = botao("Novo material", "prim", 'data-acao="novo-edicao"', "plus"); break;
@@ -699,7 +723,7 @@ function cartaoFila(f) {
     '<div class="small muted">' + tagProduto(f.produto) + (f.dataPedida ? ' · <span style="' + (risco ? "color:var(--erro);font-weight:600" : "") + '">cliente pediu ' + fmtDataExtensa(f.dataPedida) + "</span>" : " · sem data pedida") + (f.urgencia === "urgente" ? ' · <span style="color:var(--erro)">urgente</span>' : "") + (f.por ? " · " + esc(f.por) : "") + (f.origem ? " · " + esc(ORIGENS[f.origem] || f.origem) : "") + "</div>" +
     (f.driveId ? '<div class="small" style="color:var(--info)">' + icone("folder") + " Lançado pelo robô" + (f.drivePasta ? " · pasta " + esc(f.drivePasta) : "") + (!f.marcaId ? ' · <span style="color:var(--erro)">escolha a marca na ficha</span>' : "") + "</div>" : "") +
     (c.total ? '<div class="chips" style="gap:4px">' + (CHECKLIST[f.produto] || []).map(function (it) { var ok = f.checklist && f.checklist[it[0]]; return '<span class="selo ' + (ok ? "ok" : "erro") + '" style="height:20px;font-size:10.5px">' + (ok ? "" : "falta ") + esc(it[1].toLowerCase()) + "</span>"; }).join("") + "</div>" : "") +
-    '<div class="row small">' + (f.linkMaterial ? linkExterno(f.linkMaterial, "Material") : "") + (f.linkDestino ? linkExterno(f.linkDestino, "Link parametrizado") : "") + "</div>" +
+    '<div class="row small">' + (f.linkMaterial ? linkExterno(f.linkMaterial, "Material") : "") + (f.linkDestino ? linkExterno(f.linkDestino, "Link parametrizado") : "") + (f.anexos && f.anexos.length ? (f.anexos.length === 1 ? '<a href="' + attr(f.anexos[0].url) + '" target="_blank" rel="noopener" class="row" style="gap:4px">' + icone("paperclip") + esc(f.anexos[0].nome) + "</a>" : '<span class="row" style="gap:4px">' + icone("paperclip") + f.anexos.length + " arquivos</span>") : "") + "</div>" +
     '<div class="row" style="gap:6px">' + (c.completo ? botao("Dar data", "p prim", 'data-acao="alocar-fila" data-id="' + attr(f.id) + '"', "calendar") : botao("Pedir o que falta", "p", 'data-acao="fila-pedir" data-id="' + attr(f.id) + '"', "bell") + '<button type="button" class="btn p fantasma" data-acao="alocar-fila" data-id="' + attr(f.id) + '">dar data mesmo assim</button>') + "</div></div>";
 }
 function telaFila() {
@@ -1007,7 +1031,9 @@ function telaRelatorios() {
       aviso = '<div class="alerta-box">' + icone("triangle-alert") + '<span class="t">Nenhuma entrega publicada nem vídeo veiculado ' + (a === "todas" ? "nesta marca" : "nesta autorização") + (S.relDe || S.relAte ? " dentro do período escolhido" : "") + ". O relatório sairia só com capa e agradecimento." + (outras.length ? " As entregas da " + esc(m.nome) + " estão em: " + outras.map(function (x) { return '<button type="button" class="chip" data-acao="rel-aut" data-id="' + attr(x.a.id) + '">' + esc(rotuloAut(x.a)) + " · " + x.n + " item" + (x.n > 1 ? "s" : "") + "</button>"; }).join(" ") : " Registre as entregas na ficha da marca (caixa do produto, botão Registrar) e os vídeos em Brand.") + "</span></div>";
     }
     var semCotas = a !== "todas" && !temCotas(a) ? '<div class="alerta-box info">' + icone("info") + '<span class="t">Esta autorização não tem cotas cadastradas, então a tela "Materiais acordados" não entra. Cadastre as cotas em Autorizações para o relatório mostrar contratado e entregue lado a lado.</span></div>' : "";
-    previa = aviso + semCotas + '<div class="card"><div class="cab"><h2>O que vai no relatório</h2><span class="row">' + selo(cont.entregas.length + " entrega" + (cont.entregas.length === 1 ? "" : "s")) + selo(cont.brands.length + " brand") + selo(dados.slides.length + " telas") + '</span></div><div class="corpo"><ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.9">' + dados.slides.map(function (sl) { return "<li>" + esc(sl.descricao) + "</li>"; }).join("") + "</ol>" +
+    var dqKey = m.id + "|" + (a === "todas" ? "todas" : a.id); S.relDestaques = S.relDestaques || {};
+    var dqCard = '<div class="card"><div class="cab"><h2>Destaques do período (opcional)</h2>' + botao(S.relDestaques[dqKey] ? "Reescrever com IA" : "Escrever com IA", "p", 'data-acao="ia-destaques"', "sparkles") + '</div><div class="corpo col"><textarea class="textarea" rows="5" data-rel-destaques="' + attr(dqKey) + '" placeholder="Uma frase por linha. Se preencher, entra uma tela de destaques logo depois de Materiais entregues.">' + esc(S.relDestaques[dqKey] || "") + '</textarea><span class="small muted">O Claude escreve só com os números lançados nesta marca. Edite à vontade antes de gerar.</span></div></div>';
+    previa = aviso + semCotas + dqCard + '<div class="card"><div class="cab"><h2>O que vai no relatório</h2><span class="row">' + selo(cont.entregas.length + " entrega" + (cont.entregas.length === 1 ? "" : "s")) + selo(cont.brands.length + " brand") + selo(dados.slides.length + " telas") + '</span></div><div class="corpo"><ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.9">' + dados.slides.map(function (sl) { return "<li>" + esc(sl.descricao) + "</li>"; }).join("") + "</ol>" +
       '<div class="alerta-box info mt3">' + icone("info") + '<span class="t">O relatório abre em uma aba nova, em formato 16:9 igual ao do Canva. Para salvar em PDF: Arquivo, Imprimir, destino "Salvar como PDF", papel paisagem, sem margens. Prints de post entram pelo campo de imagem de cada entrega; vídeos de brand usam a thumb do YouTube.</span></div></div></div>';
   }
   var opcAut = m ? opcoesAuts(m.id).concat([["todas", "Toda a marca (todas as autorizações)"]]) : [];
@@ -1017,12 +1043,24 @@ function telaRelatorios() {
     campo("Período (opcional)", '<div class="row" style="flex-wrap:nowrap">' + input("relDe", S.relDe, "month", 'data-filtro="relDe"') + '<span class="muted">a</span>' + input("relAte", S.relAte, "month", 'data-filtro="relAte"') + "</div>", "Em branco = tudo que está lançado na autorização") +
     '</div><div class="row mt4">' + botao("Gerar relatório", "prim", 'data-acao="gerar-relatorio"' + (m && a ? "" : " disabled"), "printer") + (S.relDe || S.relAte ? botao("Limpar período", "fantasma", 'data-acao="rel-limpar-periodo"') : "") + "</div></div></div>" + previa;
 }
+function escreverDestaquesIA(el) {
+  var m = marca(S.relMarca); var a = S.relAut === "todas" ? "todas" : aut(S.relAut); if (!m || !a) return;
+  var d = coletorRelatorio(m, a); var dqKey = m.id + "|" + (a === "todas" ? "todas" : a.id);
+  var dados = { marca: m.nome, contrato: a === "todas" ? "todas as autorizações" : rotuloAut(a), periodo: d.periodo, contratado_e_entregue: d.consumo,
+    entregas: d.entregas.map(function (e) { return { produto: e.produto, data: e.data, titulo: e.titulo, rede: e.rede || null, numeros: e.metricas || {}, paginas: e.quantidade || null }; }),
+    videos_de_brand: d.brands.map(function (b) { return { titulo: b.titulo, foi_ao_ar: b.dataVeiculacao || null, youtube: b.youtube || null }; }) };
+  el.disabled = true; el.innerHTML = icone("sparkles") + "Escrevendo...";
+  return chamarIA({ tipo: "destaques", dados: dados }).then(function (r) {
+    S.relDestaques = S.relDestaques || {}; S.relDestaques[dqKey] = (r.destaques || []).join("\n"); render(); toast("Destaques escritos. Confira antes de gerar o relatório.");
+  }).catch(function (e) { toast("Não consegui escrever: " + e.message, true); render(); });
+}
 function coletorRelatorio(m, a) {
   var per = periodoRelatorio(a); var cont = contagemRelatorio(m, a, per.de, per.ate);
   cont.entregas.sort(function (x, y) { return x.data.localeCompare(y.data); });
   var autRef = a === "todas" ? (situacaoMarca(m).alvo || { id: "todas", rotulo: "Todas as autorizações", cotas: {} }) : a;
   var cons = a === "todas" ? consumoMarca(m) : consumo(a);
-  return { marca: m, autorizacao: a === "todas" ? { id: "todas", rotulo: "Todas as autorizações", cotas: autRef.cotas || {}, inicio: null, fim: null } : a, consumo: cons, entregas: cont.entregas, brands: cont.brands, periodo: per, dataEmissao: hojeISO() };
+  var dqKey = m.id + "|" + (a === "todas" ? "todas" : a.id); var dq = (S.relDestaques && S.relDestaques[dqKey]) || "";
+  return { destaques: dq.split(/\n+/).map(function (t) { return t.replace(/^[-•*\s]+/, "").trim(); }).filter(Boolean), marca: m, autorizacao: a === "todas" ? { id: "todas", rotulo: "Todas as autorizações", cotas: autRef.cotas || {}, inicio: null, fim: null } : a, consumo: cons, entregas: cont.entregas, brands: cont.brands, periodo: per, dataEmissao: hojeISO() };
 }
 /* soma das cotas e do consumo de todas as autorizações da marca (para o relatório "toda a marca") */
 function consumoMarca(m) {
@@ -1046,6 +1084,7 @@ function telaAjustes() {
       (function () { var doDrive = S.d.fila.filter(function (f) { return f.driveId; }); var ultimo = doDrive.map(function (f) { return f.roboEm || ""; }).sort().pop(); return '<div class="row between"><span class="row">' + icone("folder") + "<strong>Google Drive</strong></span>" + (ultimo ? selo("Robô ativo", "ok") : selo("Esperando a primeira rodada", "alerta")) + '</div><p class="small muted" style="margin:0">Um robô no GitHub varre a pasta MATERIAIS (Drive da Lime, DUAS RODAS / MATERIAIS, uma subpasta por marca) de hora em hora e lança cada arquivo novo na fila de materiais, com link, marca e tipo. ' + (ultimo ? doDrive.length + " arquivos lançados até agora, o último em " + fmtDataCurta(ultimo.slice(0, 10)) + " às " + new Date(ultimo).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) + "." : "Ele já está ligado; entra na primeira hora cheia depois que houver arquivo na pasta.") + " Se a pasta de uma marca tiver outro nome, preencha Pasta no Drive na ficha da marca.</p>"; })() +
       '<div class="row between"><span class="row">' + icone("chart") + "<strong>YouTube</strong></span>" + (temYoutube() ? selo("Ligado", "ok") : selo("Falta a chave", "alerta")) + '</div><p class="small muted" style="margin:0">' + (temYoutube() ? "Visualizações, curtidas e comentários dos vídeos com link do YouTube. Atualizam sozinhos ao abrir Relatórios da marca, ou pelo botão Números do YouTube no menu Brand. Hoje ' + S.d.brands.filter(function (b) { return b.youtube; }).length + ' vídeos têm números." : "Para ligar: criar uma chave da YouTube Data API v3 no Google Cloud (projeto comercial-duas-rodas) e colocar em firebase-config.js como window.YOUTUBE_KEY.") + '</p>' +
       (function () { var lidos = S.d.entregas.filter(function (e) { return e.metricas && e.metricas.metaEm; }); var ultimo = lidos.map(function (e) { return e.metricas.metaEm; }).sort().pop(); var comLink = S.d.entregas.filter(function (e) { return e.produto === "post" && /instagram\.com|facebook\.com|fb\.watch/.test(e.link || ""); }).length; return '<div class="row between"><span class="row">' + icone("chart") + "<strong>Instagram e Facebook</strong></span>" + (ultimo ? selo("Robô ativo", "ok") : selo("Esperando o token do Meta", "alerta")) + '</div><p class="small muted" style="margin:0">Um robô no GitHub lê, todo dia de manhã, alcance, curtidas, comentários, salvamentos e compartilhamentos de cada post cadastrado com link do Instagram ou do Facebook da revista, e grava na entrega. ' + (ultimo ? lidos.length + " posts com números lidos, o último em " + fmtDataCurta(ultimo) + "." : comLink + " posts com link esperando a primeira rodada.") + " Post dos últimos 7 dias é relido todo dia; depois, uma vez por semana.</p>"; })() +
+      '<div class="row between"><span class="row">' + icone("sparkles") + "<strong>Leitura com IA (Claude)</strong></span>" + selo(API && API.tipo === "firebase" ? "Pelo Firebase" : "Precisa do Firebase", API && API.tipo === "firebase" ? "ok" : "alerta") + '</div><p class="small muted" style="margin:0">Lê PDFs e fotos de contratos (Autorizações, Ler contratos com IA), lê os números do print dos Insights nas entregas, escreve os destaques do relatório e confere os arquivos que o robô do Drive lança na fila. Usa o crédito mensal de API da UnderClick.</p>' +
       '<div class="row between"><span class="row">' + icone("file-up") + "<strong>Leitura de PDF da autorização</strong></span>" + selo("Funciona para PDF com texto", "ok") + '</div><p class="small muted" style="margin:0">Ao subir o PDF na autorização, a plataforma tenta ler Gecom, vigência, valor e cotas. PDF escaneado (imagem) não tem texto para ler; nesse caso os campos ficam para preencher à mão.</p>' +
     "</div></div>" +
     '<div class="card"><div class="cab"><h2>Aparência</h2></div><div class="corpo row">' + botao("Estilo " + (temaAtual() === "escuro" ? "claro" : "escuro"), "", 'data-acao="tema"', temaAtual() === "escuro" ? "sun" : "moon") + "</div></div>" +
@@ -1059,6 +1098,7 @@ function dialogo() {
   switch (d.tipo) {
     case "marca": html = formMarca(d); break;
     case "aut": html = formAut(d); break;
+    case "ia-contratos": html = formIaContratos(d); break;
     case "brand": html = fichaBrand(d); break;
     case "entrega": html = formEntrega(d); break;
     case "fila": html = formFila(d); break;
@@ -1096,6 +1136,68 @@ function formMarca(d) {
     campo("Pasta no Drive", input("pastaDrive", m.pastaDrive), "Só se o nome da pasta em Comercial for diferente do nome da marca. O robô usa isso para reconhecer os arquivos.") +
     campo("Observações", textarea("obs", m.obs)) +
     '<label class="row"><input type="checkbox" name="ativa"' + (m.ativa !== false ? " checked" : "") + "> Marca ativa</label></div>" + peForm("Salvar", m.id ? 'data-acao="apagar-marca" data-id="' + attr(m.id) + '"' : "") + "</form>";
+}
+function alvoContrato(marcaId, r) {
+  if (!marcaId) return "novo";
+  var auts = autsDaMarca(marcaId);
+  if (r.gecom) { var g = auts.filter(function (a) { return a.gecom && String(a.gecom).replace(/\D/g, "") === String(r.gecom).replace(/\D/g, ""); })[0]; if (g) return g.id; }
+  var anoFim = r.fim ? r.fim.slice(0, 4) : null;
+  if (anoFim) { var y = auts.filter(function (a) { return (a.fim && a.fim.slice(0, 4) === anoFim) || (!a.fim && String(a.rotulo || "").indexOf(anoFim) >= 0); })[0]; if (y) return y.id; }
+  return "novo";
+}
+function formIaContratos(d) {
+  var itens = d.itens || []; var prontos = itens.filter(function (x) { return x.status === "ok" && x.incluir && x.marcaId; }).length;
+  var lendo = itens.filter(function (x) { return x.status === "fila" || x.status === "lendo"; }).length;
+  function num(i, campo, v) { return '<input class="input p" type="number" min="0" style="width:84px" value="' + attr(v == null ? "" : v) + '" data-ia-i="' + i + '" data-ia-campo="' + campo + '">'; }
+  var linhas = itens.map(function (x, i) {
+    if (x.status !== "ok") return '<tr><td class="small">' + esc(x.nome) + '</td><td colspan="9" class="small" style="color:var(--' + (x.status === "erro" ? "erro" : "muted") + ')">' + (x.status === "erro" ? esc(x.erro) : (x.status === "lendo" ? "Lendo com IA..." : "Na fila")) + "</td></tr>";
+    var auts = x.marcaId ? autsDaMarca(x.marcaId) : [];
+    var opAlvo = [["novo", "Criar contrato novo"]].concat(auts.map(function (a) { return [a.id, "Atualizar: " + rotuloAut(a)]; }));
+    return '<tr><td class="small"><label class="row" style="gap:6px"><input type="checkbox"' + (x.incluir ? " checked" : "") + ' data-ia-i="' + i + '" data-ia-campo="incluir">' + esc(x.nome) + "</label>" + (x.r.observacoes ? '<div class="muted" style="max-width:220px">' + esc(x.r.observacoes) + "</div>" : "") + (x.r.legivel === false ? '<div style="color:var(--alerta)">Documento difícil de ler, confira</div>' : "") + "</td>" +
+      '<td><select class="select p" data-ia-i="' + i + '" data-ia-campo="marcaId"><option value="">' + esc(x.r.marcaNoDocumento ? "Escolha (" + x.r.marcaNoDocumento + ")" : "Escolha") + "</option>" + S.d.marcas.slice().sort(porNome).map(function (m) { return '<option value="' + attr(m.id) + '"' + (m.id === x.marcaId ? " selected" : "") + ">" + esc(m.nome) + "</option>"; }).join("") + "</select>" +
+      '<div class="mt1"><select class="select p" data-ia-i="' + i + '" data-ia-campo="alvo">' + opAlvo.map(function (o) { return '<option value="' + attr(o[0]) + '"' + (o[0] === x.alvo ? " selected" : "") + ">" + esc(o[1]) + "</option>"; }).join("") + "</select></div></td>" +
+      '<td><input class="input p" style="width:90px" value="' + attr(x.gecom || "") + '" data-ia-i="' + i + '" data-ia-campo="gecom"></td>' +
+      '<td><input class="input p" type="date" value="' + attr(x.inicio || "") + '" data-ia-i="' + i + '" data-ia-campo="inicio"><input class="input p mt1" type="date" value="' + attr(x.fim || "") + '" data-ia-i="' + i + '" data-ia-campo="fim"></td>' +
+      ["post", "brand", "email", "revista", "banner"].map(function (p) { return "<td>" + num(i, "cota_" + p, x.cotas[p]) + "</td>"; }).join("") + "</tr>";
+  }).join("");
+  return '<div class="dialogo largo" style="max-width:1280px">' + cabDialogo("Ler contratos com IA", "Escolha os PDFs (ou fotos) das autorizações. O Claude lê cada um, mesmo escaneado, e preenche marca, Gecom, vigência e cotas. Você confere a tabela e salva.") + '<div class="corpo">' +
+    '<label class="drop" style="cursor:pointer">' + icone("file-up", "") + " Escolher arquivos (pode selecionar vários de uma vez)" + '<input type="file" accept="application/pdf,image/*" multiple class="sr-only" data-acao-arquivo="ia-contratos"></label>' +
+    (itens.length ? '<div class="tabela-wrap mt3"><table class="tabela"><thead><tr><th>Arquivo</th><th>Marca e contrato</th><th>Gecom</th><th>Vigência</th><th>Posts</th><th>Vídeos</th><th>E-mails</th><th>Páginas</th><th>Banner</th></tr></thead><tbody>' + linhas + "</tbody></table></div>" : "") +
+    (lendo ? '<div class="small muted mt2">Lendo ' + lendo + " arquivo" + (lendo > 1 ? "s" : "") + "... cada um leva uns 20 segundos.</div>" : "") +
+    '</div><div class="pe">' + botao("Fechar", "fantasma", 'data-acao="fechar"') + botao("Salvar " + prontos + " contrato" + (prontos === 1 ? "" : "s"), "prim", 'data-acao="ia-contratos-salvar"' + (prontos && !lendo ? "" : " disabled"), "check") + "</div></div>";
+}
+function lerContratosIA(files) {
+  var d = S.dialogo; if (!d || d.tipo !== "ia-contratos") return;
+  var novos = Array.prototype.slice.call(files).map(function (f) { return { nome: f.name, arquivo: f, status: "fila", incluir: true, cotas: {}, r: {} }; });
+  d.itens = (d.itens || []).concat(novos); render();
+  var marcas = nomesMarcas();
+  return novos.reduce(function (p, x) {
+    return p.then(function () {
+      x.status = "lendo"; render();
+      return arquivoBase64(x.arquivo).then(function (b) { return chamarIA({ tipo: "contrato", arquivo: b.data, mime: b.mime, nome: x.nome, marcas: marcas }); }).then(function (r) {
+        x.r = r; x.status = "ok"; x.marcaId = marcaPorNome(r.marca, r.marcaNoDocumento); x.gecom = r.gecom || ""; x.inicio = r.inicio || ""; x.fim = r.fim || "";
+        x.cotas = {}; ["post", "brand", "email", "revista", "banner"].forEach(function (k) { if (r.cotas && r.cotas[k] != null) x.cotas[k] = r.cotas[k]; });
+        x.alvo = alvoContrato(x.marcaId, r); delete x.arquivo;
+      }).catch(function (e) { x.status = "erro"; x.erro = "Não consegui ler: " + e.message; delete x.arquivo; }).then(function () { if (S.dialogo === d) render(); });
+    });
+  }, Promise.resolve());
+}
+function salvarContratosIA() {
+  var d = S.dialogo; var lista = (d.itens || []).filter(function (x) { return x.status === "ok" && x.incluir && x.marcaId; });
+  var ps = lista.map(function (x) {
+    var a = x.alvo && x.alvo !== "novo" ? clone(aut(x.alvo)) : null;
+    if (!a) a = { id: uid("aut"), marcaId: x.marcaId, rotulo: "", inicio: null, fim: null, cotas: {}, origem: "", obs: "" };
+    a.marcaId = x.marcaId; a.cotas = a.cotas || {};
+    ["post", "brand", "email", "revista", "banner"].forEach(function (k) { if (x.cotas[k] != null && x.cotas[k] !== "") a.cotas[k] = +x.cotas[k]; });
+    if (x.gecom) { a.gecom = x.gecom; if (!/gecom/i.test(a.rotulo || "")) a.rotulo = "Gecom " + x.gecom + (a.rotulo ? " (" + a.rotulo + ")" : ""); }
+    if (!a.rotulo) a.rotulo = x.fim ? x.fim.slice(0, 4) : "Contrato";
+    if (x.inicio) a.inicio = x.inicio; if (x.fim) a.fim = x.fim;
+    if (x.r.contato && !a.contato) a.contato = x.r.contato;
+    a.pdfNome = x.nome; a.origem = "PDF lido com IA: " + x.nome;
+    if (x.r.observacoes) a.obs = ((a.obs ? a.obs + " " : "") + x.r.observacoes).trim();
+    return API.salvar("autorizacoes", a);
+  });
+  return Promise.all(ps).then(function () { toast(lista.length + " contrato" + (lista.length > 1 ? "s salvos" : " salvo") + " com as cotas."); S.dialogo = null; render(); }).catch(function (e) { toast("Não salvou: " + e.message, true); });
 }
 function formAut(d) {
   var a = d.item || { marcaId: d.marcaId || "", rotulo: "", gecom: "", inicio: "", fim: "", valor: "", pagamento: "", contato: "", cotas: {}, obs: "" };
@@ -1165,7 +1267,7 @@ function formEntrega(d) {
     campo("Título ou descrição", input("titulo", e.titulo, "text", 'placeholder="Ex.: AGV e Dainese com nova distribuição no Brasil"')) +
     (e.produto === "post" ? campo("Rede", select("rede", Object.keys(REDES).map(function (k) { return [k, REDES[k]]; }), e.rede)) : "") +
     campo("Link", input("link", e.link, "url")) + metricas +
-    campo("Print para o relatório", '<div class="colar-print' + (e.imagem ? " com-imagem" : "") + '">' + (e.imagem ? '<img src="' + attr(e.imagem) + '" alt="">' : '<span class="muted">' + icone("upload", "ic") + ' Tire o print e cole aqui com <b>Cmd + V</b> (ou arraste a imagem)</span>') + '<div class="row"><label class="btn p">' + icone("upload") + (e.imagem ? "Trocar" : "Escolher arquivo") + '<input type="file" accept="image/*" class="sr-only" data-acao-arquivo="imagem-entrega"></label>' + (e.imagem ? botao("Tirar", "p fantasma", 'data-acao="tirar-imagem"') : "") + '</div></div><input type="hidden" name="imagem" value="' + attr(e.imagem || "") + '">', "Print do post, dos Insights ou da página. Fica guardado com a entrega e entra na tela do relatório.") +
+    campo("Print para o relatório", '<div class="colar-print' + (e.imagem ? " com-imagem" : "") + '">' + (e.imagem ? '<img src="' + attr(e.imagem) + '" alt="">' : '<span class="muted">' + icone("upload", "ic") + ' Tire o print e cole aqui com <b>Cmd + V</b> (ou arraste a imagem)</span>') + '<div class="row"><label class="btn p">' + icone("upload") + (e.imagem ? "Trocar" : "Escolher arquivo") + '<input type="file" accept="image/*" class="sr-only" data-acao-arquivo="imagem-entrega"></label>' + (e.imagem ? botao("Tirar", "p fantasma", 'data-acao="tirar-imagem"') : "") + '</div></div><input type="hidden" name="imagem" value="' + attr(e.imagem || "") + '">', "Print do post, dos Insights ou da página. Fica guardado com a entrega e entra na tela do relatório.") + ((e.produto === "post" || e.produto === "brand") && e.imagem ? '<div class="row mt1">' + botao("Ler números do print", "p", 'data-acao="ia-print"', "sparkles") + '<span class="small muted">Cole o print da tela de estatísticas (Insights) e o Claude preenche os números.</span></div>' : "") +
     campo("Observações", textarea("obs", e.obs)) +
     "</div>" + peForm("Salvar entrega", e.id ? 'data-acao="apagar-entrega" data-id="' + attr(e.id) + '"' : "") + "</form>";
 }
@@ -1177,9 +1279,41 @@ function formFila(d) {
     campo("O que é", input("descricao", f.descricao, "text", 'required placeholder="Ex.: Honda, carrossel PCX 160, 5 cards + legenda" data-filtro="filaDescricao"'), "Escreva o nome da marca junto que ela é reconhecida") +
     '<div class="grid g2">' + campo("Marca", select("marcaId", opcoesMarcas("Escolha"), f.marcaId, "required")) + campo("Produto", select("produto", ORDEM_PRODUTOS.map(function (p) { return [p, PRODUTOS[p].nome]; }), f.produto, 'data-filtro="filaProduto"')) + "</div>" +
     '<div class="grid g2">' + campo("Link do material (Drive, WeTransfer)", input("linkMaterial", f.linkMaterial, "url")) + campo("Link parametrizado (destino)", input("linkDestino", f.linkDestino, "url")) + "</div>" +
+    campoAnexos(d, f) +
     (itens.length ? '<div class="campo"><label>O que já veio</label><div class="checklist">' + itens.map(function (it) { return '<label class="check"><input type="checkbox" name="chk_' + it[0] + '"' + (f.checklist && f.checklist[it[0]] ? " checked" : "") + "> " + esc(it[1]) + "</label>"; }).join("") + '</div><span class="ajuda">Só o que estiver completo pode receber data sem aviso. O que faltar vira o texto de "Pedir o que falta".</span></div>' : "") +
     '<div class="grid g4">' + campo("Cliente pediu data?", input("dataPedida", f.dataPedida, "date")) + campo("Urgência", select("urgencia", Object.keys(URGENCIAS).map(function (k) { return [k, URGENCIAS[k]]; }), f.urgencia)) + campo("Como chegou", select("origem", Object.keys(ORIGENS).map(function (k) { return [k, ORIGENS[k]]; }), f.origem || "whatsapp")) + campo("Quem registrou", input("por", f.por, "text", 'placeholder="Mariana"')) + "</div>" +
     campo("Observações", textarea("obs", f.obs)) + "</div>" + peForm(f.id ? "Salvar" : "Colocar na fila", f.id ? 'data-acao="apagar-fila" data-id="' + attr(f.id) + '"' : "") + "</form>";
+}
+/* anexos da fila: arquivos guardados no Firebase Storage, em fila/<id do item>/ */
+function fmtTamanho(b) { b = +b || 0; return b >= 1073741824 ? (b / 1073741824).toFixed(1).replace(".", ",") + " GB" : b >= 1048576 ? (b / 1048576).toFixed(1).replace(".", ",") + " MB" : Math.max(1, Math.round(b / 1024)) + " KB"; }
+function anexosDoDialogo(d, f) { if (!d.anexos) d.anexos = clone((f && f.anexos) || []); return d.anexos; }
+function htmlAnexos(d) {
+  var lista = d.anexos || [], env = d.enviando || [];
+  return lista.map(function (a, i) { return '<div class="anexo"><span class="nome">' + icone("paperclip") + '<a href="' + attr(a.url) + '" target="_blank" rel="noopener">' + esc(a.nome) + '</a></span><span class="small muted nowrap">' + fmtTamanho(a.tamanho) + '</span><button type="button" class="btn p icone fantasma" data-acao="tirar-anexo" data-i="' + i + '" title="Tirar este arquivo">' + icone("x") + "</button></div>"; }).join("") +
+    env.map(function (e) { return '<div class="anexo enviando"><span class="nome">' + icone("upload") + esc(e.nome) + '</span><span class="small muted nowrap">' + (e.erro ? '<span style="color:var(--erro)">não subiu</span>' : Math.round((e.pct || 0) * 100) + "%") + "</span></div>"; }).join("");
+}
+function campoAnexos(d, f) {
+  anexosDoDialogo(d, f);
+  return '<div class="campo"><label>Arquivos</label><label class="drop anexos-drop">' + icone("paperclip", "ic") + " Anexar arquivos (arte, vídeo, legenda, PDF). Clique ou arraste aqui. Pode ser mais de um." +
+    '<input type="file" multiple class="sr-only" data-acao-arquivo="anexo-fila"></label><div class="anexos" id="anexos-fila">' + htmlAnexos(d) + "</div>" +
+    '<span class="ajuda">Fica guardado no Firebase da plataforma, junto com este item. Até 500 MB por arquivo.</span></div>';
+}
+function atualizarAnexosNaTela() { var c = document.getElementById("anexos-fila"); if (c && S.dialogo) c.innerHTML = htmlAnexos(S.dialogo); }
+function enviarAnexosFila(files) {
+  var d = S.dialogo; if (!d || d.tipo !== "fila" || !files || !files.length) return;
+  if (!API || API.tipo !== "firebase") { toast("Anexar arquivo precisa do Firebase ligado.", true); return; }
+  anexosDoDialogo(d, d.item); d.enviando = d.enviando || [];
+  var id = (d.item && d.item.id) || d.anexoId || (d.anexoId = uid("fila"));
+  Array.prototype.forEach.call(files, function (file) {
+    if (file.size > 500 * 1048576) { toast(file.name + " passa de 500 MB. Mande pelo link do Drive.", true); return; }
+    var env = { nome: file.name, pct: 0 }; d.enviando.push(env); atualizarAnexosNaTela();
+    var caminho = "fila/" + id + "/" + Date.now() + "-" + file.name.replace(/[\/#?\[\]*]/g, "_");
+    API.enviarArquivo(caminho, file, function (p) { env.pct = p; atualizarAnexosNaTela(); }).then(function (url) {
+      d.enviando = d.enviando.filter(function (x) { return x !== env; });
+      d.anexos.push({ nome: file.name, tamanho: file.size, tipo: file.type || "", url: url, caminho: caminho, enviadoEm: hojeISO() });
+      if (S.dialogo === d) atualizarAnexosNaTela();
+    }).catch(function (e) { env.erro = true; atualizarAnexosNaTela(); toast("Não subiu " + file.name + ": " + e.message, true); });
+  });
 }
 function formAlocar(d) {
   var f = d.item;
@@ -1369,7 +1503,11 @@ function aoSubmeter(ev) {
     return salvar("marcas", mk, "Cobrança registrada em " + fmtData(f.data || hojeISO()) + ".");
   }
   if (tipo === "fila") {
-    item.id = item.id || uid("fila"); item.marcaId = f.marcaId; item.produto = f.produto; item.descricao = f.descricao; item.linkMaterial = f.linkMaterial; item.linkDestino = f.linkDestino; item.dataPedida = f.dataPedida || null; item.urgencia = f.urgencia; item.por = f.por; item.obs = f.obs; item.origem = f.origem || "outro"; item.status = item.status || "aguardando"; item.criadoEm = item.criadoEm || hojeISO();
+    if (S.dialogo.enviando && S.dialogo.enviando.some(function (x) { return !x.erro; })) { toast("Espere os arquivos terminarem de subir.", true); return; }
+    var antes = (item.anexos || []).map(function (a) { return a.caminho; });
+    item.anexos = clone(S.dialogo.anexos || item.anexos || []);
+    antes.filter(function (c) { return !item.anexos.some(function (a) { return a.caminho === c; }); }).forEach(function (c) { API.apagarArquivo(c); });
+    item.id = item.id || S.dialogo.anexoId || uid("fila"); item.marcaId = f.marcaId; item.produto = f.produto; item.descricao = f.descricao; item.linkMaterial = f.linkMaterial; item.linkDestino = f.linkDestino; item.dataPedida = f.dataPedida || null; item.urgencia = f.urgencia; item.por = f.por; item.obs = f.obs; item.origem = f.origem || "outro"; item.status = item.status || "aguardando"; item.criadoEm = item.criadoEm || hojeISO();
     item.checklist = {}; (CHECKLIST[item.produto] || []).forEach(function (it) { item.checklist[it[0]] = !!form["chk_" + it[0]] && form["chk_" + it[0]].checked; });
     if (item.linkDestino && item.checklist.link === false && !form.chk_link.checked) item.checklist.link = true;
     return salvar("fila", item, item.status === "aguardando" ? "Material na fila." : "Salvo.");
@@ -1424,6 +1562,10 @@ function aoClicar(ev) {
     case "filtro-brand-bola": S.filtroBrandBola = S.filtroBrandBola === v && FASES_BRAND.some(function (f) { return f.id === v; }) ? "todos" : v; return render();
     case "brand-avancar-rapido": return avancarBrandRapido(id);
     case "brand-cobrar-rapido": { var bc = byId(S.d.brands, id); S.dialogo = { tipo: "cobranca-brand", brandId: id }; return render(); }
+    case "ia-contratos": S.dialogo = { tipo: "ia-contratos", itens: [] }; return render();
+    case "ia-contratos-salvar": return salvarContratosIA();
+    case "ia-print": return lerPrintIA(el);
+    case "ia-destaques": return escreverDestaquesIA(el);
     case "brand-mais": S.brandMaisAberto = S.brandMaisAberto || {}; S.brandMaisAberto[id] = !S.brandMaisAberto[id]; return render();
     case "brand-veic": S.brandVeicAberto = S.brandVeicAberto || {}; S.brandVeicAberto[id] = !S.brandVeicAberto[id]; return render();
     case "nova-marca": return abrirMarcaForm(null);
@@ -1451,7 +1593,8 @@ function aoClicar(ev) {
     case "tirar-imagem": S.dialogo.item = S.dialogo.item || {}; S.dialogo.item = Object.assign(lerFormParaItem(el.closest("form")), { imagem: "" }); return render();
     case "novo-fila": S.dialogo = { tipo: "fila", item: null }; return render();
     case "editar-fila": S.dialogo = { tipo: "fila", item: clone(byId(S.d.fila, id)) }; return render();
-    case "apagar-fila": return confirmar("Excluir da fila", "Tirar este material da fila?", "Excluir", function () { apagar("fila", id, "Removido da fila."); });
+    case "apagar-fila": return confirmar("Excluir da fila", "Tirar este material da fila? Os arquivos anexados também são apagados.", "Excluir", function () { var fa = byId(S.d.fila, id); ((fa && fa.anexos) || []).forEach(function (a) { API.apagarArquivo(a.caminho); }); apagar("fila", id, "Removido da fila."); });
+    case "tirar-anexo": if (S.dialogo && S.dialogo.anexos) { S.dialogo.anexos.splice(+el.getAttribute("data-i"), 1); atualizarAnexosNaTela(); } return;
     case "alocar-fila": S.dialogo = { tipo: "alocar", item: clone(byId(S.d.fila, id)) }; return render();
     case "novo-edicao": S.dialogo = { tipo: "edicao", item: null }; return render();
     case "editar-edicao": S.dialogo = { tipo: "edicao", item: clone(byId(S.d.edicao, id)) }; return render();
@@ -1487,6 +1630,8 @@ function aoMudar(ev) {
     var file = el.files[0]; if (!file) return;
     return file.text().then(function (txt) { var novo = JSON.parse(txt); if (!novo.marcas) throw new Error("arquivo sem marcas"); return API.substituirTudo(novo); }).then(function (d) { S.d = d; toast("Dados importados."); render(); }).catch(function (e) { toast("Não consegui importar: " + e.message, true); });
   }
+  if (arq === "ia-contratos") return;
+  if (arq === "anexo-fila") { enviarAnexosFila(el.files); el.value = ""; return; }
   if (arq === "ler-pdf") {
     var pdf = el.files[0]; if (!pdf) return; S.dialogo.lendo = true; S.dialogo.avisoPdf = ""; render();
     return lerPdfAutorizacao(pdf).then(function (r) {
@@ -1498,6 +1643,17 @@ function aoMudar(ev) {
       it.pdfNome = pdf.name; S.dialogo.item = it; S.dialogo.lendo = false; S.dialogo.marcaId = it.marcaId || S.dialogo.marcaId;
       S.dialogo.avisoPdf = achou ? "Li o PDF e preenchi o que encontrei. Confira cada campo antes de salvar." : (r.textoLido < 40 ? "Esse PDF é uma imagem escaneada, sem texto para ler. Preencha os campos à mão olhando o documento." : "Não reconheci o formato deste PDF. Preencha à mão.");
       S.dialogo.avisoPdfTipo = achou ? "ok" : "alerta"; render();
+      if (!achou && API && API.tipo === "firebase") {
+        var dlg = S.dialogo; dlg.lendo = true; dlg.avisoPdf = "O PDF não tem texto legível. Lendo com IA..."; dlg.avisoPdfTipo = "info"; render();
+        return arquivoBase64(pdf).then(function (b) { return chamarIA({ tipo: "contrato", arquivo: b.data, mime: b.mime, nome: pdf.name, marcas: nomesMarcas() }); }).then(function (ri) {
+          if (S.dialogo !== dlg) return; var it2 = dlg.item || { cotas: {} }; it2.cotas = it2.cotas || {};
+          if (ri.gecom) { it2.gecom = ri.gecom; it2.rotulo = it2.rotulo || "Gecom " + ri.gecom; } if (ri.inicio) it2.inicio = ri.inicio; if (ri.fim) it2.fim = ri.fim; if (ri.contato) it2.contato = ri.contato;
+          ORDEM_PRODUTOS.forEach(function (p) { if (ri.cotas && ri.cotas[p] != null) it2.cotas[p] = ri.cotas[p]; });
+          if (!it2.marcaId) it2.marcaId = marcaPorNome(ri.marca, ri.marcaNoDocumento);
+          dlg.item = it2; dlg.marcaId = it2.marcaId || dlg.marcaId; dlg.lendo = false;
+          dlg.avisoPdf = "Li o PDF com IA e preenchi o que encontrei." + (ri.observacoes ? " Obs.: " + ri.observacoes : "") + " Confira cada campo antes de salvar."; dlg.avisoPdfTipo = "ok"; render();
+        }).catch(function (e) { if (S.dialogo !== dlg) return; dlg.lendo = false; dlg.avisoPdf = "Não consegui ler com IA: " + e.message + " Preencha à mão olhando o documento."; dlg.avisoPdfTipo = "alerta"; render(); });
+      }
     }).catch(function (e) { S.dialogo.lendo = false; S.dialogo.avisoPdf = "Não consegui ler o PDF: " + e.message; S.dialogo.avisoPdfTipo = "erro"; render(); });
   }
   if (arq === "imagem-entrega") {
@@ -1531,6 +1687,19 @@ function aoMudar(ev) {
   }
   render();
 }
+function arquivoBase64(file) {
+  return new Promise(function (ok, erro) { var fr = new FileReader(); fr.onload = function () { var u = String(fr.result); ok({ data: u.slice(u.indexOf(",") + 1), mime: file.type || "application/pdf" }); }; fr.onerror = function () { erro(new Error("Não consegui abrir o arquivo.")); }; fr.readAsDataURL(file); });
+}
+function chamarIA(pedido) {
+  if (!API || !API.ia) return Promise.reject(new Error("A leitura com IA precisa do Firebase ligado."));
+  return API.ia(pedido).then(function (r) { return r && r.dados ? r.dados : r; }).catch(function (e) { var msg = (e && e.message) || "falha"; if (/not-found|NOT_FOUND|404/.test(msg)) msg = "a leitura com IA ainda não foi ligada (falta publicar a função)."; throw new Error(msg); });
+}
+function nomesMarcas() { return S.d.marcas.map(function (m) { return m.nome; }); }
+function marcaPorNome(nome, outro) {
+  var n = String(nome || "").toLowerCase().trim(); if (n) { var m = S.d.marcas.filter(function (x) { return x.nome.toLowerCase() === n; })[0]; if (m) return m.id; }
+  var o = String(outro || nome || "").toLowerCase().split(/[\s\/]+/)[0]; if (o && o.length > 2) { var c = S.d.marcas.filter(function (x) { return x.nome.toLowerCase().indexOf(o) >= 0; }); if (c.length === 1) return c[0].id; }
+  return "";
+}
 function reduzirImagem(file, max) {
   return new Promise(function (ok, erro) {
     var img = new Image(); var u = URL.createObjectURL(file);
@@ -1542,12 +1711,38 @@ function reduzirImagem(file, max) {
 /* ============================================================ início */
 document.addEventListener("click", aoClicar);
 document.addEventListener("submit", aoSubmeter);
+document.addEventListener("input", function (ev) { var k = ev.target && ev.target.getAttribute && ev.target.getAttribute("data-rel-destaques"); if (k) { S.relDestaques = S.relDestaques || {}; S.relDestaques[k] = ev.target.value; } });
+document.addEventListener("change", function (ev) {
+  var el = ev.target; if (!el.getAttribute) return;
+  if (el.getAttribute("data-acao-arquivo") === "ia-contratos") { var fs2 = el.files; if (fs2 && fs2.length) lerContratosIA(fs2); el.value = ""; return; }
+  var i = el.getAttribute("data-ia-i"); if (i == null || !S.dialogo || S.dialogo.tipo !== "ia-contratos") return;
+  var x = S.dialogo.itens[+i]; var campo = el.getAttribute("data-ia-campo"); if (!x) return;
+  if (campo === "incluir") x.incluir = el.checked;
+  else if (campo.indexOf("cota_") === 0) x.cotas[campo.slice(5)] = el.value === "" ? null : +el.value;
+  else x[campo] = el.value;
+  if (campo === "marcaId") x.alvo = alvoContrato(x.marcaId, { gecom: x.gecom, fim: x.fim });
+  render();
+});
 document.addEventListener("input", function (ev) { var f = ev.target.getAttribute && ev.target.getAttribute("data-filtro"); if (f === "busca" || f === "filaDescricao") aoMudar(ev); });
 document.addEventListener("input", function (ev) { if (ev.target && ev.target.name === "link_youtube" && S.dialogo && S.dialogo.tipo === "brand") { clearTimeout(ytTimer); var v = ev.target.value; ytTimer = setTimeout(function () { previaYoutube(v); }, 600); } });
 document.addEventListener("change", function (ev) { var f = ev.target.getAttribute && (ev.target.getAttribute("data-filtro") || ev.target.getAttribute("data-acao-arquivo") || ev.target.getAttribute("data-cota-aut") || ev.target.getAttribute("data-ed-id")); if (f && f !== "busca" && f !== "filaDescricao") aoMudar(ev); });
 var rotaAnterior = rota().caminho;
 window.addEventListener("hashchange", function () { var agora = rota().caminho; if (agora !== rotaAnterior) S.busca = ""; rotaAnterior = agora; S.gavetaAberta = false; render(); });
 document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && S.dialogo) fechar(); });
+function lerPrintIA(el) {
+  var form = el.closest('form[data-form="entrega"]'); if (!form) return;
+  var it = lerFormParaItem(form); if (!it.imagem) return toast("Cole o print primeiro.", true);
+  S.dialogo.item = it; el.disabled = true; var txt = el.innerHTML; el.innerHTML = icone("sparkles") + "Lendo...";
+  var u = it.imagem; var mime = (/^data:([^;]+);/.exec(u) || [])[1] || "image/jpeg";
+  return chamarIA({ tipo: "print", imagem: u.slice(u.indexOf(",") + 1), mime: mime, rede: it.rede || "" }).then(function (r) {
+    if (!r.eInsights) { toast("Esse print não parece a tela de estatísticas. Cole o print dos Insights do post.", true); el.disabled = false; el.innerHTML = txt; return; }
+    var m = it.metricas = it.metricas || {}; var n = 0;
+    ["visualizacoes", "alcance", "curtidas", "comentarios", "compartilhamentos", "salvamentos"].forEach(function (k) { if (r[k] != null) { m[k] = r[k]; n++; } });
+    if (r.visualizacoes == null && r.impressoes != null) { m.visualizacoes = r.impressoes; n++; }
+    m.fonte = "print"; m.printLidoEm = hojeISO();
+    S.dialogo.item = it; render(); toast(n + " número" + (n === 1 ? "" : "s") + " lido" + (n === 1 ? "" : "s") + " do print. Confira e salve.");
+  }).catch(function (e) { toast("Não consegui ler o print: " + e.message, true); el.disabled = false; el.innerHTML = txt; });
+}
 function imagemParaEntrega(file) {
   var form = document.querySelector('form[data-form="entrega"]'); if (!form || !file || !/^image\//.test(file.type)) return false;
   reduzirImagem(file, 1200).then(function (dataUrl) { var it = lerFormParaItem(form); it.imagem = dataUrl; S.dialogo.item = it; render(); toast("Print colado na entrega."); }).catch(function () { toast("Não consegui ler a imagem.", true); });
@@ -1565,11 +1760,13 @@ document.addEventListener("dragover", function (ev) {
   if (arrastandoEd) { var col = ev.target.closest && ev.target.closest(".kb-col"); document.querySelectorAll(".kb-col.alvo").forEach(function (e) { e.classList.remove("alvo"); }); if (col) { ev.preventDefault(); col.classList.add("alvo"); } return; }
   if (arrastandoFila) { var dia = ev.target.closest && ev.target.closest(".prog-dia"); document.querySelectorAll(".prog-dia.alvo").forEach(function (e) { e.classList.remove("alvo"); }); if (dia && !dia.classList.contains("passado")) { ev.preventDefault(); dia.classList.add("alvo"); } return; }
   if (S.dialogo && S.dialogo.tipo === "entrega") { ev.preventDefault(); var z = document.querySelector(".colar-print"); if (z) z.classList.add("arrastando"); }
+  if (S.dialogo && S.dialogo.tipo === "fila") { ev.preventDefault(); var za = document.querySelector(".anexos-drop"); if (za) za.classList.add("arrastando"); }
 });
-document.addEventListener("dragleave", function () { var z = document.querySelector(".colar-print"); if (z) z.classList.remove("arrastando"); });
+document.addEventListener("dragleave", function () { var z = document.querySelector(".colar-print, .anexos-drop"); if (z) z.classList.remove("arrastando"); });
 document.addEventListener("drop", function (ev) {
   if (arrastandoEd) { var colE = ev.target.closest && ev.target.closest(".kb-col"); ev.preventDefault(); var ed = byId(S.d.edicao, arrastandoEd); arrastandoEd = null; document.querySelectorAll(".kb-col.alvo").forEach(function (e) { e.classList.remove("alvo"); }); if (colE && ed) { var alvo = statusDaColuna(ed, colE.getAttribute("data-kb")); if (alvo && alvo.novo !== ed.status) statusEdicao(ed, alvo.novo, alvo.extra); } return; }
   if (arrastandoFila) { var dia = ev.target.closest && ev.target.closest(".prog-dia"); ev.preventDefault(); if (dia && !dia.classList.contains("passado")) { var fi = byId(S.d.fila, arrastandoFila); if (fi) { S.dialogo = { tipo: "alocar", item: clone(fi), dataSugerida: dia.getAttribute("data-dia") }; render(); } } arrastandoFila = null; return; }
+  if (S.dialogo && S.dialogo.tipo === "fila") { ev.preventDefault(); var za = document.querySelector(".anexos-drop"); if (za) za.classList.remove("arrastando"); enviarAnexosFila(ev.dataTransfer && ev.dataTransfer.files); return; }
   if (!S.dialogo || S.dialogo.tipo !== "entrega") return; ev.preventDefault(); var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0]; imagemParaEntrega(f);
 });
 render();

@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 var CHAVE = "drc-tutorial-visto";
-var VERSAO_TUTORIAL = 11;
+var VERSAO_TUTORIAL = 12;
 
 /* ============================================================ passos do passeio
    rota: para onde ir antes de mostrar o passo. alvo: lista de seletores; usa o primeiro que existir e estiver visível.
@@ -107,6 +107,13 @@ var GUIA = [
     "Todo arquivo novo na subpasta entra na fila na hora cheia seguinte, com link, marca e tipo (post, e-mail, banner, revista ou brand, adivinhado pelo nome e pelo formato).",
     "O robô só lê: não apaga, não move e não renomeia nada no Drive. Arquivo trocado depois de lançado ganha uma observação na fila.",
     "Arquivo em subpasta que a plataforma não reconhece entra sem marca, com aviso para escolher na ficha." ] },
+  { titulo: "Usar a leitura com IA (Claude)", passos: [
+    "Contratos: em Autorizações, clique em Ler contratos com IA e escolha os PDFs ou fotos das autorizações, vários de uma vez. O Claude lê cada um, mesmo escaneado, e monta uma tabela com marca, Gecom, vigência e cotas. Confira, ajuste o que precisar e clique em Salvar.",
+    "Para cada contrato a tabela já diz se vai atualizar um contrato que existe ou criar um novo. Dá para trocar na própria linha.",
+    "Print dos Insights: na entrega do post, cole o print da tela de estatísticas e clique em Ler números do print. Os campos de alcance, curtidas e o resto são preenchidos. Confira e salve.",
+    "Relatório: em Relatórios, depois de escolher a marca, clique em Escrever com IA no quadro de destaques. O Claude escreve de 3 a 5 frases só com os números lançados. Edite à vontade; se o quadro tiver texto, o relatório ganha uma tela de destaques.",
+    "Drive: o robô que lê a pasta MATERIAIS agora abre cada arquivo novo e diz o tipo do material, uma descrição e o que a marca ainda precisa mandar. Isso aparece no checklist e na observação do item da fila.",
+    "Tudo isso usa o crédito mensal de API da UnderClick. Ler um contrato ou um print custa centavos." ] },
   { titulo: "Gerar o relatório de um cliente", passos: [
     "Vá em Relatórios. Escolha a marca e a autorização. Se quiser só um mês, preencha o período.",
     "Confira a lista do que vai entrar e clique em Gerar relatório. Ele abre em uma aba nova.",

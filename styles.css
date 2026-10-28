@@ -479,3 +479,13 @@ html[data-tema="escuro"] .ano-cel.cheia.post{background:#1E3A8A;color:#BFDBFE}ht
 .yt-box .alerta-box{align-items:center}
 .yt-box .alerta-box .btn{margin-left:auto;flex:none}
 .brand-mais{align-self:flex-start;margin-top:-4px}
+
+/* anexos da fila */
+.anexos-drop{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;cursor:pointer}
+.anexos-drop.arrastando{border-color:var(--fg);background:var(--muted-bg)}
+.anexos{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.anexos:empty{display:none}
+.anexo{display:flex;align-items:center;gap:10px;padding:6px 6px 6px 10px;border:1px solid var(--borda);border-radius:var(--raio-p);background:var(--card)}
+.anexo .nome{flex:1;min-width:0;display:flex;align-items:center;gap:6px;overflow:hidden;white-space:nowrap}
+.anexo .nome a{overflow:hidden;text-overflow:ellipsis;color:var(--fg)}
+.anexo.enviando{opacity:.75;padding-right:10px}

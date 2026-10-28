@@ -1,0 +1,11 @@
+rules_version = '2';
+// Regras do Firebase Storage (bucket comercial-duas-rodas-lime.firebasestorage.app, US-EAST1).
+// Publicadas pelo console em 28/10/2026. Só a fila de materiais guarda arquivos.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /fila/{item}/{arquivo} {
+      allow read, delete: if request.auth != null;
+      allow create, update: if request.auth != null && request.resource.size < 500 * 1024 * 1024;
+    }
+  }
+}
