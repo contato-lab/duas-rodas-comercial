@@ -1709,7 +1709,7 @@ function arquivoBase64(file) {
 function lerPostAgora(item) {
   if (!API || !API.metaPost) return;
   toast("Lendo o post no Instagram/Facebook...");
-  return API.metaPost({ link: item.link, data: item.data, temImagem: !!item.imagem, metricas: item.metricas || {} }).then(function (r) {
+  return API.metaPost({ link: item.link, data: item.data, titulo: item.titulo || "", temImagem: !!item.imagem, metricas: item.metricas || {} }).then(function (r) {
     var novo = clone(byId(S.d.entregas, item.id) || item);
     if (novo.link !== item.link) return;
     if (r.aviso) { novo.metricas = Object.assign({}, novo.metricas || {}, { metaAviso: r.aviso }); toast(r.aviso, true); }
