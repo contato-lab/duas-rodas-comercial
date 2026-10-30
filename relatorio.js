@@ -55,17 +55,19 @@ function slideDestaques(d) {
 // Título clicável + botão que abre o post na rede (vale também no PDF salvo pelo Chrome)
 function redeDoLink(u) { return /instagram\.com/.test(u) ? "INSTAGRAM" : (/youtu\.?be/.test(u) ? "YOUTUBE" : (/facebook\.com|fb\.watch|fb\.com/.test(u) ? "FACEBOOK" : "")); }
 function legendaComLink(titulo, link) {
+  titulo = String(titulo || "").replace(/[\u2122\u00AE\u00A9]/g, "").replace(/\s{2,}/g, " ").trim();
   var ok = /^https?:\/\//.test(link || "");
   if (!ok) return titulo ? '<div class="legenda">' + esc(titulo.toUpperCase()) + "</div>" : "";
   var rede = redeDoLink(link);
   return (titulo ? '<a class="legenda" href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(titulo.toUpperCase()) + "</a>" : "") +
     '<a class="ver-post" href="' + esc(link) + '" target="_blank" rel="noopener">' + (rede ? "VER NO " + rede : "VER O POST") + " &#8599;</a>";
 }
+function qtd(n, um, varios) { return fmtNum(n) + " " + (+n === 1 ? um : varios); }
 function caixaMetrica(titulo, linhas) { return '<div class="metrica"><span class="rotulo">' + esc(titulo) + "</span><div>" + linhas.map(function (l) { return "<span>" + esc(l) + "</span>"; }).join("") + "</div></div>"; }
 function slidePost(d, e) {
   var m = e.metricas || {}; var esq = [], dir = [];
-  if (m.visualizacoes != null) esq.push(fmtNum(m.visualizacoes) + " VISUALIZAÇÕES"); if (m.alcance != null) esq.push(fmtNum(m.alcance) + " CONTAS ALCANÇADAS");
-  if (m.curtidas != null) dir.push(fmtNum(m.curtidas) + " CURTIDAS"); if (m.comentarios != null) dir.push(fmtNum(m.comentarios) + " COMENTÁRIOS"); if (m.compartilhamentos != null) dir.push(fmtNum(m.compartilhamentos) + " COMPARTILHAMENTOS"); if (m.salvamentos != null) dir.push(fmtNum(m.salvamentos) + " SALVAMENTOS");
+  if (m.visualizacoes != null) esq.push(qtd(m.visualizacoes, "VISUALIZAÇÃO", "VISUALIZAÇÕES")); if (m.alcance != null) esq.push(qtd(m.alcance, "CONTA ALCANÇADA", "CONTAS ALCANÇADAS"));
+  if (m.curtidas != null) dir.push(qtd(m.curtidas, "CURTIDA", "CURTIDAS")); if (m.comentarios != null) dir.push(qtd(m.comentarios, "COMENTÁRIO", "COMENTÁRIOS")); if (m.compartilhamentos != null) dir.push(qtd(m.compartilhamentos, "COMPARTILHAMENTO", "COMPARTILHAMENTOS")); if (m.salvamentos != null) dir.push(qtd(m.salvamentos, "SALVAMENTO", "SALVAMENTOS"));
   var img = e.imagem ? '<div class="print"><img src="' + esc(e.imagem) + '" alt=""></div>' : '<div class="print vazio"><span>Print do post</span></div>';
   return { descricao: "Post " + fmtData(e.data) + ": " + (e.titulo || "sem título"), html: '<section class="slide item">' + faixaTitulo(d.marca.nome, "POSTS", "PUBLICIDADE", e.data) +
     '<div class="corpo">' + img + '<div class="metricas">' + (esq.length ? caixaMetrica("ALCANCE", esq) : "") + (dir.length ? caixaMetrica("INTERAÇÕES", dir) : "") + (!esq.length && !dir.length ? caixaMetrica("PUBLICADO", [fmtData(e.data), e.rede ? e.rede.replace("_", " e ").toUpperCase() : ""]) : "") + "</div></div>" +
@@ -74,7 +76,7 @@ function slidePost(d, e) {
 function slideBrand(d, b) {
   var yt = youtubeId(b.links && b.links.youtube); var ent = d.entregas.filter(function (e) { return e.produto === "brand" && (e.link === (b.links || {}).youtube || e.titulo === b.titulo); })[0];
   var m = (ent && ent.metricas && ent.metricas.visualizacoes != null) ? ent.metricas : (b.youtube || (ent && ent.metricas) || {}); var linhas = [];
-  if (m.visualizacoes != null) linhas.push(fmtNum(m.visualizacoes) + " VISUALIZAÇÕES"); if (m.curtidas != null) linhas.push(fmtNum(m.curtidas) + " CURTIDAS"); if (m.comentarios != null && m.comentarios > 0) linhas.push(fmtNum(m.comentarios) + " COMENTÁRIOS");
+  if (m.visualizacoes != null) linhas.push(qtd(m.visualizacoes, "VISUALIZAÇÃO", "VISUALIZAÇÕES")); if (m.curtidas != null) linhas.push(qtd(m.curtidas, "CURTIDA", "CURTIDAS")); if (m.comentarios != null && m.comentarios > 0) linhas.push(qtd(m.comentarios, "COMENTÁRIO", "COMENTÁRIOS"));
   var img = ent && ent.imagem ? '<div class="print"><img src="' + esc(ent.imagem) + '" alt=""></div>' : (yt ? '<div class="print"><img src="https://img.youtube.com/vi/' + yt + '/maxresdefault.jpg" onerror="this.src=\'https://img.youtube.com/vi/' + yt + '/hqdefault.jpg\'" alt=""></div>' : '<div class="print vazio"><span>Thumb do vídeo</span></div>');
   return { descricao: "Branded: " + b.titulo + (b.dataVeiculacao ? " (" + fmtData(b.dataVeiculacao) + ")" : ""), html: '<section class="slide item">' + faixaTitulo(d.marca.nome, "BRANDED", "", b.dataVeiculacao) +
     '<div class="corpo">' + img + '<div class="metricas">' + caixaMetrica("ALCANCE", linhas.length ? linhas : ["VEICULADO NO YOUTUBE", b.apresentador ? "COM " + b.apresentador.toUpperCase() : ""]) + "</div></div>" +
