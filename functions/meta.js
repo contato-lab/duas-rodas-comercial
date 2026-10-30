@@ -80,6 +80,23 @@ async function imagemDoInstagram(graph, m) {
   return m.media_url || m.thumbnail_url || null;
 }
 
+// Link de compartilhar (facebook.com/share/..., fb.me) esconde o endereço do post: segue o redirecionamento
+// como o leitor de links do Facebook e devolve o endereço real (facebook.com/pagina/posts/pfbid...)
+async function resolverLinkFacebook(link) {
+  if (!/facebook\.com\/share\/|fb\.me\/|fb\.watch\//.test(link || "")) return link;
+  let u = link;
+  for (let i = 0; i < 4; i++) {
+    try {
+      const r = await fetch(u, { redirect: "manual", headers: { "User-Agent": "facebookexternalhit/1.1" } });
+      const prox = r.headers.get("location"); if (!prox || r.status < 300 || r.status >= 400) break;
+      u = new URL(prox, u).toString();
+      if (!/facebook\.com\/share\/|fb\.me\/|fb\.watch\//.test(u)) break;
+    } catch (e) { console.warn("não segui o link", u, e.message); break; }
+  }
+  return u;
+}
+// Código do post no endereço: pfbid... ou número longo
+function idDoPostFacebook(link) { const m = /(pfbid\w+)/.exec(link || "") || /\/(\d{10,})/.exec(link || "") || /(?:story_fbid|fbid)=(\d+)/.exec(link || ""); return m ? m[1] : null; }
 // Facebook: lista só os posts da página perto da data da entrega e casa pelo link
 async function acharNoFacebook(graph, pagina, link, dataEntrega) {
   const params = { fields: "id,permalink_url,created_time,message,full_picture", limit: 100, access_token: pagina.access_token };
@@ -88,12 +105,13 @@ async function acharNoFacebook(graph, pagina, link, dataEntrega) {
     params.since = Math.floor((d - FOLGA_DIAS * 86400000) / 1000);
     params.until = Math.floor((d + FOLGA_DIAS * 86400000) / 1000);
   }
-  const alvo = normalizarUrl(link); const idNoLink = (/\/(\d{10,})/.exec(link) || [])[1] || (/(?:story_fbid|fbid)=(\d+)/.exec(link) || [])[1];
+  link = await resolverLinkFacebook(link);
+  const alvo = normalizarUrl(link); const idNoLink = idDoPostFacebook(link);
   let j = await graph(`/${pagina.id}/posts`, params);
   for (let paginas = 0; paginas < 20; paginas++) {
     for (const p of j.data || []) {
       if (p.permalink_url && normalizarUrl(p.permalink_url) === alvo) return p;
-      if (idNoLink && (p.id === idNoLink || p.id.split("_")[1] === idNoLink)) return p;
+      if (idNoLink && (p.id === idNoLink || p.id.split("_")[1] === idNoLink || (p.permalink_url || "").indexOf(idNoLink) >= 0)) return p;
     }
     if (!j.paging || !j.paging.next) return null;
     j = await graph(j.paging.next);
