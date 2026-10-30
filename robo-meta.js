@@ -24,7 +24,7 @@ const G = "https://graph.facebook.com/v21.0";
 const DIAS_REFRESCO = +process.env.DIAS_REFRESCO || 7; // post com menos de N dias é relido todo dia; depois, uma vez por semana
 
 async function graph(caminho, params) {
-  const u = new URL(G + caminho); Object.entries(params || {}).forEach(([k, v]) => u.searchParams.set(k, v)); u.searchParams.set("access_token", TOKEN);
+  const u = new URL(G + caminho); Object.entries(params || {}).forEach(([k, v]) => u.searchParams.set(k, v)); if (!u.searchParams.has("access_token")) u.searchParams.set("access_token", TOKEN); // posts da página usam o token da própria página
   const r = await fetch(u); const j = await r.json();
   if (j.error) throw new Error(j.error.message + " (" + caminho + ")");
   return j;
