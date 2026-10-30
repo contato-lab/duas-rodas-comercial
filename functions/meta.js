@@ -97,6 +97,17 @@ async function resolverLinkFacebook(link) {
 }
 // Código do post no endereço: pfbid... ou número longo
 function idDoPostFacebook(link) { const m = /(pfbid\w+)/.exec(link || "") || /\/(\d{10,})/.exec(link || "") || /(?:story_fbid|fbid)=(\d+)/.exec(link || ""); return m ? m[1] : null; }
+// Link de foto/vídeo (facebook.com/photo/?fbid=..., /videos/...) traz o id da mídia, não do post:
+// a própria API diz em qual post da página a mídia saiu (page_story_id)
+async function postPelaMidia(graph, pagina, link) {
+  const m = /(?:fbid=|\/videos\/(?:[\w.-]+\/)?|\/photos\/[\w.-]+\/)(\d{8,})/.exec(link || "");
+  if (!m) return null;
+  try {
+    const midia = await graph(`/${m[1]}`, { fields: "page_story_id", access_token: pagina.access_token });
+    if (!midia.page_story_id) return null;
+    return await graph(`/${midia.page_story_id}`, { fields: "id,permalink_url,created_time,message,full_picture", access_token: pagina.access_token });
+  } catch (e) { console.warn("não achei o post pela mídia", m[1], e.message); return null; }
+}
 // Facebook: lista só os posts da página perto da data da entrega e casa pelo link
 async function acharNoFacebook(graph, pagina, link, dataEntrega) {
   const params = { fields: "id,permalink_url,created_time,message,full_picture", limit: 100, access_token: pagina.access_token };
@@ -106,6 +117,7 @@ async function acharNoFacebook(graph, pagina, link, dataEntrega) {
     params.until = Math.floor((d + FOLGA_DIAS * 86400000) / 1000);
   }
   link = await resolverLinkFacebook(link);
+  const pelaMidia = await postPelaMidia(graph, pagina, link); if (pelaMidia) return pelaMidia;
   const alvo = normalizarUrl(link); const idNoLink = idDoPostFacebook(link);
   let j = await graph(`/${pagina.id}/posts`, params);
   for (let paginas = 0; paginas < 20; paginas++) {
