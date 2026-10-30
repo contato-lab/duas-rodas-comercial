@@ -64,10 +64,27 @@ async function insightsInstagram(m) {
   return { alcance: num(ins.reach), visualizacoes: num(ins.views), curtidas: num(ins.likes != null ? ins.likes : m.like_count), comentarios: num(ins.comments != null ? ins.comments : m.comments_count), salvamentos: num(ins.saved), compartilhamentos: num(ins.shares) };
 }
 
+// Link de compartilhar (facebook.com/share/..., fb.me) esconde o endereço do post: segue o redirecionamento
+// como o leitor de links do Facebook e devolve o endereço real (facebook.com/pagina/posts/pfbid...)
+async function resolverLinkFacebook(link) {
+  if (!/facebook\.com\/share\/|fb\.me\/|fb\.watch\//.test(link || "")) return link;
+  let u = link;
+  for (let i = 0; i < 4; i++) {
+    try {
+      const r = await fetch(u, { redirect: "manual", headers: { "User-Agent": "facebookexternalhit/1.1" } });
+      const prox = r.headers.get("location"); if (!prox || r.status < 300 || r.status >= 400) break;
+      u = new URL(prox, u).toString();
+      if (!/facebook\.com\/share\/|fb\.me\/|fb\.watch\//.test(u)) break;
+    } catch (e) { console.warn("não segui o link", u, e.message); break; }
+  }
+  return u;
+}
+// Código do post no endereço: pfbid... ou número longo
+function idDoPostFacebook(link) { const m = /(pfbid\w+)/.exec(link || "") || /\/(\d{10,})/.exec(link || "") || /(?:story_fbid|fbid)=(\d+)/.exec(link || ""); return m ? m[1] : null; }
 // Facebook: lista os posts da página e casa pelo link
 async function mapaFacebook(pagina) {
   const posts = await todasAsPaginas(`/${pagina.id}/posts`, { fields: "id,permalink_url,created_time,message,full_picture", limit: 100, access_token: pagina.access_token });
-  const mapa = new Map(); posts.forEach(p => { if (p.permalink_url) mapa.set(normalizarUrl(p.permalink_url), p); mapa.set(p.id, p); const idCurto = p.id.split("_")[1]; if (idCurto) mapa.set(idCurto, p); });
+  const mapa = new Map(); posts.forEach(p => { if (p.permalink_url) { mapa.set(normalizarUrl(p.permalink_url), p); const pf = idDoPostFacebook(p.permalink_url); if (pf) mapa.set(pf, p); } mapa.set(p.id, p); const idCurto = p.id.split("_")[1]; if (idCurto) mapa.set(idCurto, p); });
   return mapa;
 }
 function normalizarUrl(u) { try { const x = new URL(u); return (x.hostname.replace(/^(www|m|web)\./, "") + x.pathname).replace(/\/$/, "").toLowerCase(); } catch (e) { return String(u || "").toLowerCase(); } }
@@ -126,7 +143,7 @@ async function main() {
     try {
       let novo = null, legenda = null, urlImg = null; const cod = codigoInstagram(e.link);
       if (cod) { const m = mIg.get(cod); if (m) { novo = await insightsInstagram(m); legenda = m.caption; if (!e.imagem) urlImg = await urlDaImagemIg(m); } }
-      else { const p = mFb.get(normalizarUrl(e.link)) || mFb.get((/\/(\d{10,})/.exec(e.link) || [])[1]); if (p) { novo = await insightsFacebook(p, pagina); legenda = p.message; if (!e.imagem) urlImg = p.full_picture; } }
+      else { const real = await resolverLinkFacebook(e.link); const p = mFb.get(normalizarUrl(real)) || mFb.get(idDoPostFacebook(real)); if (p) { novo = await insightsFacebook(p, pagina); legenda = p.message; if (!e.imagem) urlImg = p.full_picture; } }
       if (!novo) { naoAchados++; faltando.push(e.titulo || e.link); await e.ref.update({ "metricas.metaAviso": "Post não encontrado na conta da revista. Confira o link." }); continue; }
       const metricas = Object.assign({}, e.metricas || {}); Object.entries(novo).forEach(([k, v]) => { if (v != null) metricas[k] = v; });
       metricas.metaEm = hoje; metricas.fonte = cod ? "instagram" : "facebook"; delete metricas.metaAviso;
