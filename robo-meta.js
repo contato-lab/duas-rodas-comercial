@@ -81,6 +81,17 @@ async function resolverLinkFacebook(link) {
 }
 // Código do post no endereço: pfbid... ou número longo
 function idDoPostFacebook(link) { const m = /(pfbid\w+)/.exec(link || "") || /\/(\d{10,})/.exec(link || "") || /(?:story_fbid|fbid)=(\d+)/.exec(link || ""); return m ? m[1] : null; }
+// Link de foto/vídeo (facebook.com/photo/?fbid=..., /videos/...) traz o id da mídia, não do post:
+// a própria API diz em qual post da página a mídia saiu (page_story_id)
+async function postPelaMidia(graph, pagina, link) {
+  const m = /(?:fbid=|\/videos\/(?:[\w.-]+\/)?|\/photos\/[\w.-]+\/)(\d{8,})/.exec(link || "");
+  if (!m) return null;
+  try {
+    const midia = await graph(`/${m[1]}`, { fields: "page_story_id", access_token: pagina.access_token });
+    if (!midia.page_story_id) return null;
+    return await graph(`/${midia.page_story_id}`, { fields: "id,permalink_url,created_time,message,full_picture", access_token: pagina.access_token });
+  } catch (e) { console.warn("não achei o post pela mídia", m[1], e.message); return null; }
+}
 // Facebook: lista os posts da página e casa pelo link
 async function mapaFacebook(pagina) {
   const posts = await todasAsPaginas(`/${pagina.id}/posts`, { fields: "id,permalink_url,created_time,message,full_picture", limit: 100, access_token: pagina.access_token });
@@ -143,7 +154,7 @@ async function main() {
     try {
       let novo = null, legenda = null, urlImg = null; const cod = codigoInstagram(e.link);
       if (cod) { const m = mIg.get(cod); if (m) { novo = await insightsInstagram(m); legenda = m.caption; if (!e.imagem) urlImg = await urlDaImagemIg(m); } }
-      else { const real = await resolverLinkFacebook(e.link); const p = mFb.get(normalizarUrl(real)) || mFb.get(idDoPostFacebook(real)); if (p) { novo = await insightsFacebook(p, pagina); legenda = p.message; if (!e.imagem) urlImg = p.full_picture; } }
+      else { const real = await resolverLinkFacebook(e.link); const p = mFb.get(normalizarUrl(real)) || mFb.get(idDoPostFacebook(real)) || await postPelaMidia(graph, pagina, real); if (p) { novo = await insightsFacebook(p, pagina); legenda = p.message; if (!e.imagem) urlImg = p.full_picture; } }
       if (!novo) { naoAchados++; faltando.push(e.titulo || e.link); await e.ref.update({ "metricas.metaAviso": "Post não encontrado na conta da revista. Confira o link." }); continue; }
       const metricas = Object.assign({}, e.metricas || {}); Object.entries(novo).forEach(([k, v]) => { if (v != null) metricas[k] = v; });
       metricas.metaEm = hoje; metricas.fonte = cod ? "instagram" : "facebook"; delete metricas.metaAviso;
