@@ -132,7 +132,7 @@ async function main() {
       metricas.metaEm = hoje; metricas.fonte = cod ? "instagram" : "facebook"; delete metricas.metaAviso;
       const mudar = { metricas };
       const titulo = tituloDaLegenda(legenda); if (titulo && titulo !== e.legendaPost) mudar.legendaPost = titulo;
-      if (urlImg) { try { const im = await imagemReduzida(urlImg); if (im) { mudar.imagem = im; prints++; } } catch (err) { console.warn("sem print para", e.titulo || e.link, err.message); } }
+      if (urlImg) { try { const im = await imagemReduzida(urlImg); if (im) { mudar.imagem = im; mudar.imagemAuto = true; prints++; } } catch (err) { console.warn("sem print para", e.titulo || e.link, err.message); } }
       await e.ref.update(mudar); atualizados++;
       console.log(`+ ${e.titulo || e.link}: ` + Object.entries(novo).filter(([k, v]) => v != null).map(([k, v]) => `${k} ${v}`).join(", "));
     } catch (err) { console.warn("falhou", e.titulo || e.link, err.message); }

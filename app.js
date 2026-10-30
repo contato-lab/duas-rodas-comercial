@@ -245,6 +245,12 @@ function criarApiFirebase(cfg) {
         var fns = m.getFunctions(app, "southamerica-east1");
         return m.httpsCallable(fns, "ia", { timeout: 300000 })(pedido).then(function (r) { return r.data; });
       });
+    },
+    metaPost: function (pedido) {
+      return import(base + "firebase-functions.js").then(function (m) {
+        var fns = m.getFunctions(app, "southamerica-east1");
+        return m.httpsCallable(fns, "metaPost", { timeout: 120000 })(pedido).then(function (r) { return r.data; });
+      });
     }
   };
 }
@@ -1495,7 +1501,10 @@ function aoSubmeter(ev) {
     item.id = item.id || uid("ent"); item.marcaId = f.marcaId; item.autorizacaoId = f.autorizacaoId || null; item.produto = f.produto; item.data = f.data; item.status = f.status; item.titulo = f.titulo; item.link = f.link; item.rede = f.rede || null; item.obs = f.obs; item.mes = f.mes || mesChave(f.data); item.quantidade = f.quantidade ? +f.quantidade : (item.produto === "revista" ? 1 : null); item.formato = f.formato || null; item.imagem = f.imagem || null;
     item.metricas = {}; Object.keys(f).forEach(function (k) { if (k.indexOf("m_") === 0 && f[k] !== "") item.metricas[k.slice(2)] = num(f[k]); });
     if (!item.marcaId) return toast("Escolha a marca.", true);
+    var linkMudou = !d.item || (d.item.link || "") !== (item.link || "");
+    if (linkMudou) { delete item.legendaPost; if (item.imagemAuto) { item.imagem = null; delete item.imagemAuto; } }
     return salvar("entregas", item, item.status === "agendado" ? "Entrega programada para " + fmtDataExtensa(item.data) + "." : "Entrega registrada.").then(function () {
+      if (item.produto === "post" && item.link && item.status !== "agendado") lerPostAgora(item);
       var fila = S.d.fila.filter(function (x) { return x.entregaId === item.id; })[0];
       if (fila && item.status !== "agendado" && fila.status !== "publicado") { fila.status = "publicado"; API.salvar("fila", fila).then(render); }
     });
@@ -1695,6 +1704,22 @@ function aoMudar(ev) {
 }
 function arquivoBase64(file) {
   return new Promise(function (ok, erro) { var fr = new FileReader(); fr.onload = function () { var u = String(fr.result); ok({ data: u.slice(u.indexOf(",") + 1), mime: file.type || "application/pdf" }); }; fr.onerror = function () { erro(new Error("Não consegui abrir o arquivo.")); }; fr.readAsDataURL(file); });
+}
+// Post com link: lê números, print e título na hora pela função metaPost, sem esperar o robô das 06h30
+function lerPostAgora(item) {
+  if (!API || !API.metaPost) return;
+  toast("Lendo o post no Instagram/Facebook...");
+  return API.metaPost({ link: item.link, data: item.data, temImagem: !!item.imagem, metricas: item.metricas || {} }).then(function (r) {
+    var novo = clone(byId(S.d.entregas, item.id) || item);
+    if (novo.link !== item.link) return;
+    if (r.aviso) { novo.metricas = Object.assign({}, novo.metricas || {}, { metaAviso: r.aviso }); toast(r.aviso, true); }
+    else {
+      novo.metricas = r.metricas; if (r.legendaPost) novo.legendaPost = r.legendaPost;
+      if (r.imagem && !novo.imagem) { novo.imagem = r.imagem; novo.imagemAuto = true; }
+      var m = r.metricas || {}; toast("Post lido: " + [m.visualizacoes != null ? fmtNum(m.visualizacoes) + " visualizações" : "", m.alcance != null ? fmtNum(m.alcance) + " de alcance" : "", m.curtidas != null ? fmtNum(m.curtidas) + " curtidas" : ""].filter(Boolean).join(", ") + (r.imagem ? ". Print e título gravados." : "."));
+    }
+    return API.salvar("entregas", novo).then(render);
+  }).catch(function (e) { var msg = (e && e.message) || "falha"; if (/not-found|NOT_FOUND|404/.test(msg)) return; toast("Não consegui ler o post agora (" + msg + "). O robô tenta de novo às 06h30.", true); });
 }
 function chamarIA(pedido) {
   if (!API || !API.ia) return Promise.reject(new Error("A leitura com IA precisa do Firebase ligado."));
