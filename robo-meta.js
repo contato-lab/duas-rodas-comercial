@@ -103,10 +103,13 @@ async function mapaFacebook(pagina) {
 }
 function normalizarUrl(u) { try { const x = new URL(u); return (x.hostname.replace(/^(www|m|web)\./, "") + x.pathname).replace(/\/$/, "").toLowerCase(); } catch (e) { return String(u || "").toLowerCase(); } }
 async function insightsFacebook(post, pagina) {
-  const j = await graph(`/${post.id}/insights`, { metric: "post_impressions_unique,post_reactions_like_total,post_clicks", access_token: pagina.access_token });
-  const ins = {}; (j.data || []).forEach(d => { ins[d.name] = d.values && d.values[0] ? d.values[0].value : null; });
+  // O Meta vem aposentando métricas de post; pede uma por vez e fica com as que ainda existem
+  const ins = {};
+  for (const m of ["post_impressions_unique", "post_impressions", "post_media_views", "post_video_views"]) {
+    try { const j = await graph(`/${post.id}/insights`, { metric: m, access_token: pagina.access_token }); (j.data || []).forEach(d => { ins[d.name] = d.values && d.values[0] ? d.values[0].value : null; }); } catch (e) { console.warn("métrica indisponível", m, e.message.slice(0, 60)); }
+  }
   const det = await graph(`/${post.id}`, { fields: "shares,comments.summary(true).limit(0),reactions.summary(true).limit(0)", access_token: pagina.access_token });
-  return { alcance: num(ins.post_impressions_unique), curtidas: num(det.reactions && det.reactions.summary && det.reactions.summary.total_count), comentarios: num(det.comments && det.comments.summary && det.comments.summary.total_count), compartilhamentos: num(det.shares && det.shares.count) };
+  return { alcance: num(ins.post_impressions_unique != null ? ins.post_impressions_unique : ins.post_impressions), visualizacoes: num(ins.post_video_views != null ? ins.post_video_views : ins.post_media_views), curtidas: num(det.reactions && det.reactions.summary && det.reactions.summary.total_count), comentarios: num(det.comments && det.comments.summary && det.comments.summary.total_count), compartilhamentos: num(det.shares && det.shares.count) };
 }
 function num(v) { return v == null || isNaN(+v) ? null : +v; }
 
