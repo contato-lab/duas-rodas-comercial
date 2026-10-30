@@ -29,7 +29,7 @@ jobs:
         with:
           node-version: 20
       - name: Instalar bibliotecas
-        run: npm install --no-save --no-audit --no-fund @google-cloud/firestore@7
+        run: npm install --no-save --no-audit --no-fund @google-cloud/firestore@7 jimp@0.22.12
       - name: Puxar resultados dos posts do Instagram e do Facebook
         run: node robo-meta.js
         env:
