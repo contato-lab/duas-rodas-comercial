@@ -60,7 +60,7 @@ function slidePost(d, e) {
   var img = e.imagem ? '<div class="print"><img src="' + esc(e.imagem) + '" alt=""></div>' : '<div class="print vazio"><span>Print do post</span></div>';
   return { descricao: "Post " + fmtData(e.data) + ": " + (e.titulo || "sem título"), html: '<section class="slide item">' + faixaTitulo(d.marca.nome, "POSTS", "PUBLICIDADE", e.data) +
     '<div class="corpo">' + img + '<div class="metricas">' + (esq.length ? caixaMetrica("ALCANCE", esq) : "") + (dir.length ? caixaMetrica("INTERAÇÕES", dir) : "") + (!esq.length && !dir.length ? caixaMetrica("PUBLICADO", [fmtData(e.data), e.rede ? e.rede.replace("_", " e ").toUpperCase() : ""]) : "") + "</div></div>" +
-    (e.titulo ? '<div class="legenda">' + esc(e.titulo.toUpperCase()) + "</div>" : "") + "</section>" };
+    ((e.legendaPost || e.titulo) ? '<div class="legenda">' + esc((e.legendaPost || e.titulo).toUpperCase()) + "</div>" : "") + "</section>" };
 }
 function slideBrand(d, b) {
   var yt = youtubeId(b.links && b.links.youtube); var ent = d.entregas.filter(function (e) { return e.produto === "brand" && (e.link === (b.links || {}).youtube || e.titulo === b.titulo); })[0];

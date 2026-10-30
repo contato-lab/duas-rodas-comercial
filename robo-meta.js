@@ -1,6 +1,8 @@
 // Robô do Meta: puxa os resultados de cada post do Instagram e do Facebook pelo link cadastrado na
 // entrega (alcance, curtidas, comentários, salvamentos, compartilhamentos, visualizações) e grava
-// em entrega.metricas, para o relatório sair sem digitar número.
+// em entrega.metricas, para o relatório sair sem digitar número. Se a entrega ainda não tem print,
+// grava a imagem do post (reduzida) em entrega.imagem, e guarda a 1ª linha da legenda em
+// entrega.legendaPost, que é o título que aparece na tela do relatório.
 // Roda no GitHub Actions uma vez por dia (ver .github/workflows/robo-meta.yml).
 //
 // Precisa de:
@@ -12,6 +14,7 @@
 //                página que o token enxerga que tenha Instagram ligado.
 
 const { Firestore } = require("@google-cloud/firestore");
+const Jimp = require("jimp");
 
 const TOKEN = process.env.META_TOKEN;
 if (!TOKEN) { console.error("Falta o segredo META_TOKEN."); process.exit(1); }
@@ -46,7 +49,7 @@ async function acharConta() {
 
 // Instagram: a API não busca por link, então lista as mídias da conta e casa pelo código do link
 async function mapaInstagram(igId) {
-  const midias = await todasAsPaginas(`/${igId}/media`, { fields: "id,shortcode,permalink,media_type,media_product_type,timestamp,like_count,comments_count", limit: 100 });
+  const midias = await todasAsPaginas(`/${igId}/media`, { fields: "id,shortcode,permalink,media_type,media_product_type,timestamp,like_count,comments_count,caption,media_url,thumbnail_url", limit: 100 });
   const mapa = new Map(); midias.forEach(m => { if (m.shortcode) mapa.set(m.shortcode, m); const c = codigoInstagram(m.permalink); if (c) mapa.set(c, m); });
   return mapa;
 }
@@ -63,7 +66,7 @@ async function insightsInstagram(m) {
 
 // Facebook: lista os posts da página e casa pelo link
 async function mapaFacebook(pagina) {
-  const posts = await todasAsPaginas(`/${pagina.id}/posts`, { fields: "id,permalink_url,created_time", limit: 100, access_token: pagina.access_token });
+  const posts = await todasAsPaginas(`/${pagina.id}/posts`, { fields: "id,permalink_url,created_time,message,full_picture", limit: 100, access_token: pagina.access_token });
   const mapa = new Map(); posts.forEach(p => { if (p.permalink_url) mapa.set(normalizarUrl(p.permalink_url), p); mapa.set(p.id, p); const idCurto = p.id.split("_")[1]; if (idCurto) mapa.set(idCurto, p); });
   return mapa;
 }
@@ -76,6 +79,31 @@ async function insightsFacebook(post, pagina) {
 }
 function num(v) { return v == null || isNaN(+v) ? null : +v; }
 
+// Título do post: 1ª linha da legenda, sem hashtags e menções soltas no fim
+function tituloDaLegenda(txt) {
+  const linha = String(txt || "").split(/\n/).map(l => l.trim()).find(l => l.replace(/[#@][\w.]+/g, "").trim().length > 3);
+  if (!linha) return null;
+  let t = linha.replace(/(\s*[#@][\w.]+)+\s*$/, "").trim();
+  if (t.length > 90) t = t.slice(0, 87).replace(/\s+\S*$/, "") + "...";
+  return t;
+}
+// Imagem do post: Instagram usa a capa do vídeo ou a 1ª foto do carrossel; Facebook usa full_picture
+async function urlDaImagemIg(m) {
+  if (m.media_type === "VIDEO") return m.thumbnail_url || null;
+  if (m.media_url && m.media_type !== "CAROUSEL_ALBUM") return m.media_url;
+  try { const j = await graph(`/${m.id}/children`, { fields: "media_type,media_url,thumbnail_url" }); const c = (j.data || [])[0]; if (c) return c.media_type === "VIDEO" ? c.thumbnail_url : c.media_url; } catch (e) { console.warn("sem filhos do carrossel", m.id, e.message); }
+  return m.media_url || m.thumbnail_url || null;
+}
+// Baixa e reduz para 720 px de largura (JPEG ~80 KB), no mesmo formato do print colado à mão
+async function imagemReduzida(url) {
+  if (!url) return null;
+  const r = await fetch(url); if (!r.ok) throw new Error("imagem respondeu " + r.status);
+  const img = await Jimp.read(Buffer.from(await r.arrayBuffer()));
+  if (img.bitmap.width > 720) img.resize(720, Jimp.AUTO);
+  const buf = await img.quality(72).getBufferAsync(Jimp.MIME_JPEG);
+  return "data:image/jpeg;base64," + buf.toString("base64");
+}
+
 async function main() {
   const inicio = new Date(); const hoje = hojeISO();
   const estadoRef = db.collection("robo").doc("meta");
@@ -85,7 +113,7 @@ async function main() {
 
   const snap = await db.collection("entregas").get();
   const alvo = snap.docs.map(d => ({ ref: d.ref, ...d.data() })).filter(e => e.produto === "post" && e.link && (codigoInstagram(e.link) || ehFacebook(e.link)));
-  const pendentes = alvo.filter(e => { const m = e.metricas || {}; if (!m.metaEm) return true; const idade = e.data ? diasEntre(e.data, hoje) : 999; const desde = diasEntre(m.metaEm, hoje); return idade <= DIAS_REFRESCO ? desde >= 1 : desde >= 7; });
+  const pendentes = alvo.filter(e => { const m = e.metricas || {}; if (!m.metaEm || !e.imagem || !e.legendaPost) return true; const idade = e.data ? diasEntre(e.data, hoje) : 999; const desde = diasEntre(m.metaEm, hoje); return idade <= DIAS_REFRESCO ? desde >= 1 : desde >= 7; });
   console.log(`${alvo.length} posts com link do Instagram ou Facebook, ${pendentes.length} para atualizar.`);
   if (!pendentes.length) { await estadoRef.set({ ultimaRodada: inicio.toISOString(), pagina: pagina.name, instagram: ig ? ig.username : null, posts: alvo.length, atualizados: 0, naoAchados: 0, erro: null }, { merge: true }); return; }
 
@@ -93,21 +121,24 @@ async function main() {
   const mIg = precisaIg && ig ? await mapaInstagram(ig.id) : new Map();
   const mFb = precisaFb ? await mapaFacebook(pagina) : new Map();
 
-  let atualizados = 0, naoAchados = 0; const faltando = [];
+  let atualizados = 0, naoAchados = 0, prints = 0; const faltando = [];
   for (const e of pendentes) {
     try {
-      let novo = null; const cod = codigoInstagram(e.link);
-      if (cod) { const m = mIg.get(cod); if (m) novo = await insightsInstagram(m); }
-      else { const p = mFb.get(normalizarUrl(e.link)) || mFb.get((/\/(\d{10,})/.exec(e.link) || [])[1]); if (p) novo = await insightsFacebook(p, pagina); }
+      let novo = null, legenda = null, urlImg = null; const cod = codigoInstagram(e.link);
+      if (cod) { const m = mIg.get(cod); if (m) { novo = await insightsInstagram(m); legenda = m.caption; if (!e.imagem) urlImg = await urlDaImagemIg(m); } }
+      else { const p = mFb.get(normalizarUrl(e.link)) || mFb.get((/\/(\d{10,})/.exec(e.link) || [])[1]); if (p) { novo = await insightsFacebook(p, pagina); legenda = p.message; if (!e.imagem) urlImg = p.full_picture; } }
       if (!novo) { naoAchados++; faltando.push(e.titulo || e.link); await e.ref.update({ "metricas.metaAviso": "Post não encontrado na conta da revista. Confira o link." }); continue; }
       const metricas = Object.assign({}, e.metricas || {}); Object.entries(novo).forEach(([k, v]) => { if (v != null) metricas[k] = v; });
       metricas.metaEm = hoje; metricas.fonte = cod ? "instagram" : "facebook"; delete metricas.metaAviso;
-      await e.ref.update({ metricas }); atualizados++;
+      const mudar = { metricas };
+      const titulo = tituloDaLegenda(legenda); if (titulo && titulo !== e.legendaPost) mudar.legendaPost = titulo;
+      if (urlImg) { try { const im = await imagemReduzida(urlImg); if (im) { mudar.imagem = im; prints++; } } catch (err) { console.warn("sem print para", e.titulo || e.link, err.message); } }
+      await e.ref.update(mudar); atualizados++;
       console.log(`+ ${e.titulo || e.link}: ` + Object.entries(novo).filter(([k, v]) => v != null).map(([k, v]) => `${k} ${v}`).join(", "));
     } catch (err) { console.warn("falhou", e.titulo || e.link, err.message); }
   }
-  await estadoRef.set({ ultimaRodada: inicio.toISOString(), pagina: pagina.name, instagram: ig ? ig.username : null, posts: alvo.length, atualizados, naoAchados, faltando: faltando.slice(0, 20), erro: null }, { merge: true });
-  console.log(`Pronto: ${atualizados} atualizados, ${naoAchados} não encontrados.`);
+  await estadoRef.set({ ultimaRodada: inicio.toISOString(), pagina: pagina.name, instagram: ig ? ig.username : null, posts: alvo.length, atualizados, naoAchados, prints, faltando: faltando.slice(0, 20), erro: null }, { merge: true });
+  console.log(`Pronto: ${atualizados} atualizados, ${prints} prints novos, ${naoAchados} não encontrados.`);
 }
 
 main().catch(async e => {
