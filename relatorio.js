@@ -143,7 +143,7 @@ var CSS = '@import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&fami
   ".secao .letras{background:linear-gradient(160deg,#fff 0 100%)}.secao .letras span{color:#0A0A0A}.secao:before{content:'';position:absolute;left:0;top:0;bottom:0;width:110px;background:repeating-linear-gradient(135deg,#0A0A0A 0 30px,#fff 30px 70px)}" +
   ".secao .caixa-esq{position:absolute;left:110px;top:120px;width:940px;height:840px;background:#0A0A0A;padding:200px 100px 0;box-shadow:60px 0 120px rgba(0,0,0,.35)}.secao h1{margin:0;font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:160px;line-height:.95;color:#fff}.secao h1 b{color:" + VERMELHO + ";font-weight:400}" +
   ".barra-topo{position:sticky;top:0;z-index:9;background:#111;color:#fff;padding:10px 16px;display:flex;gap:12px;align-items:center;font-size:14px}.barra-topo button{background:" + VERMELHO + ";color:#fff;border:0;border-radius:8px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer}" +
-  "@media print{html,body{background:#fff}.barra-topo{display:none}.slide{margin:0;box-shadow:none}@page{size:1920px 1080px;margin:0}}";
+  "*{-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}html,body{background:#0d0d0d}.barra-topo{display:none}.slide{margin:0;box-shadow:none}@page{size:1920px 1080px;margin:0}}";
 function abrir(d) {
   var dados = montarDados(d);
   var w = window.open("", "_blank"); if (!w) { alert("O navegador bloqueou a aba nova. Libere pop-ups para este site."); return; }
