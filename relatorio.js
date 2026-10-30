@@ -52,6 +52,15 @@ function slideDestaques(d) {
   return { descricao: "Destaques do período (" + d.destaques.length + ")", html: '<section class="slide lista destaques"><div class="esq"><h1>DESTAQUES<br><b>DO PERÍODO</b></h1><div class="faixa"><span class="riscos"></span><span class="rel">RELATÓRIO <b>' + esc(d.marca.nome) + '</b></span></div></div><div class="div"></div><ul>' +
     d.destaques.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul></section>" };
 }
+// Título clicável + botão que abre o post na rede (vale também no PDF salvo pelo Chrome)
+function redeDoLink(u) { return /instagram\.com/.test(u) ? "INSTAGRAM" : (/youtu\.?be/.test(u) ? "YOUTUBE" : (/facebook\.com|fb\.watch|fb\.com/.test(u) ? "FACEBOOK" : "")); }
+function legendaComLink(titulo, link) {
+  var ok = /^https?:\/\//.test(link || "");
+  if (!ok) return titulo ? '<div class="legenda">' + esc(titulo.toUpperCase()) + "</div>" : "";
+  var rede = redeDoLink(link);
+  return (titulo ? '<a class="legenda" href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(titulo.toUpperCase()) + "</a>" : "") +
+    '<a class="ver-post" href="' + esc(link) + '" target="_blank" rel="noopener">' + (rede ? "VER NO " + rede : "VER O POST") + " &#8599;</a>";
+}
 function caixaMetrica(titulo, linhas) { return '<div class="metrica"><span class="rotulo">' + esc(titulo) + "</span><div>" + linhas.map(function (l) { return "<span>" + esc(l) + "</span>"; }).join("") + "</div></div>"; }
 function slidePost(d, e) {
   var m = e.metricas || {}; var esq = [], dir = [];
@@ -60,7 +69,7 @@ function slidePost(d, e) {
   var img = e.imagem ? '<div class="print"><img src="' + esc(e.imagem) + '" alt=""></div>' : '<div class="print vazio"><span>Print do post</span></div>';
   return { descricao: "Post " + fmtData(e.data) + ": " + (e.titulo || "sem título"), html: '<section class="slide item">' + faixaTitulo(d.marca.nome, "POSTS", "PUBLICIDADE", e.data) +
     '<div class="corpo">' + img + '<div class="metricas">' + (esq.length ? caixaMetrica("ALCANCE", esq) : "") + (dir.length ? caixaMetrica("INTERAÇÕES", dir) : "") + (!esq.length && !dir.length ? caixaMetrica("PUBLICADO", [fmtData(e.data), e.rede ? e.rede.replace("_", " e ").toUpperCase() : ""]) : "") + "</div></div>" +
-    ((e.legendaPost || e.titulo) ? '<div class="legenda">' + esc((e.legendaPost || e.titulo).toUpperCase()) + "</div>" : "") + "</section>" };
+    legendaComLink(e.legendaPost || e.titulo, e.link) + "</section>" };
 }
 function slideBrand(d, b) {
   var yt = youtubeId(b.links && b.links.youtube); var ent = d.entregas.filter(function (e) { return e.produto === "brand" && (e.link === (b.links || {}).youtube || e.titulo === b.titulo); })[0];
@@ -69,7 +78,7 @@ function slideBrand(d, b) {
   var img = ent && ent.imagem ? '<div class="print"><img src="' + esc(ent.imagem) + '" alt=""></div>' : (yt ? '<div class="print"><img src="https://img.youtube.com/vi/' + yt + '/maxresdefault.jpg" onerror="this.src=\'https://img.youtube.com/vi/' + yt + '/hqdefault.jpg\'" alt=""></div>' : '<div class="print vazio"><span>Thumb do vídeo</span></div>');
   return { descricao: "Branded: " + b.titulo + (b.dataVeiculacao ? " (" + fmtData(b.dataVeiculacao) + ")" : ""), html: '<section class="slide item">' + faixaTitulo(d.marca.nome, "BRANDED", "", b.dataVeiculacao) +
     '<div class="corpo">' + img + '<div class="metricas">' + caixaMetrica("ALCANCE", linhas.length ? linhas : ["VEICULADO NO YOUTUBE", b.apresentador ? "COM " + b.apresentador.toUpperCase() : ""]) + "</div></div>" +
-    '<div class="legenda">' + esc(((ent && ent.titulo) || b.titulo).toUpperCase()) + "</div></section>" };
+    legendaComLink((ent && ent.titulo) || b.titulo, (b.links && b.links.youtube) || (ent && ent.link)) + "</section>" };
 }
 function slideEmail(d, lista) {
   var linhas = lista.map(function (e) { var m = e.metricas || {}; return [fmtData(e.data), (e.titulo || "Disparo") + (m.base ? " · base " + fmtNum(m.base) : "") + (m.aberturas ? " · " + fmtNum(m.aberturas) + " aberturas" : "") + (m.cliques ? " · " + fmtNum(m.cliques) + " cliques" : "")]; });
@@ -118,7 +127,7 @@ var CSS = '@import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&fami
   ".print.vazio{height:450px;display:flex;align-items:center;justify-content:center;color:#666;font-family:'Bebas Neue',Impact,sans-serif;font-size:40px;border:2px dashed #333}" +
   ".metricas{display:flex;flex-direction:row;flex-wrap:wrap;gap:40px 36px;padding-top:70px;align-items:flex-start}" +
   ".metrica{border:3px solid #fff;padding:34px 28px 22px;min-width:360px;position:relative;margin-top:20px}.metrica .rotulo{position:absolute;left:-3px;top:-34px;background:" + VERMELHO + ";padding:6px 30px 6px 14px;font-weight:800;font-size:28px;text-transform:uppercase}.metrica div{display:flex;flex-direction:column;gap:4px;font-family:'Bebas Neue',Impact,sans-serif;font-size:36px;line-height:1.15}" +
-  ".legenda{position:absolute;left:0;right:0;bottom:70px;text-align:center;font-family:'Bebas Neue',Impact,sans-serif;font-size:36px;text-decoration:underline;text-underline-offset:6px;padding:0 200px}" +
+  ".legenda{position:absolute;left:0;right:0;bottom:92px;color:#fff;display:block;text-align:center;font-family:'Bebas Neue',Impact,sans-serif;font-size:36px;text-decoration:underline;text-underline-offset:6px;padding:0 200px}.ver-post{position:absolute;left:50%;transform:translateX(-50%);bottom:30px;background:" + VERMELHO + ";color:#fff;text-decoration:none;font-family:'Bebas Neue',Impact,sans-serif;font-size:26px;letter-spacing:1px;padding:6px 22px 4px}" +
   ".caixas{position:absolute;left:220px;right:150px;top:400px;display:grid;grid-template-columns:repeat(3,1fr);gap:70px 60px;align-content:start}.caixas.quatro{grid-template-columns:repeat(4,1fr);gap:70px 60px}.caixas.muitas{grid-template-columns:repeat(4,1fr);gap:54px 40px;top:380px}.caixas.muitas .cx{min-height:96px;padding:34px 22px 16px}.caixas.muitas .cx div{font-size:30px}.caixas.muitas .cx .rot{font-size:24px;top:-28px}" +
   ".cx{border:3px solid #fff;padding:40px 28px 26px;position:relative;min-height:150px}.cx .rot{position:absolute;left:-3px;top:-32px;background:" + VERMELHO + ";padding:6px 30px 6px 14px;font-weight:800;font-size:28px}.cx div{font-family:'Bebas Neue',Impact,sans-serif;font-size:36px;line-height:1.15}" +
   ".lateral{position:absolute;left:0;top:0;bottom:0;width:120px;background:repeating-linear-gradient(135deg,#fff 0 30px,#000 30px 70px)}.lateral~.faixa{left:230px}.lateral~.tit{left:230px}" +
