@@ -108,8 +108,11 @@ async function postPelaMidia(graph, pagina, link) {
     return await graph(`/${midia.page_story_id}`, { fields: "id,permalink_url,created_time,message,full_picture", access_token: pagina.access_token });
   } catch (e) { console.warn("não achei o post pela mídia", m[1], e.message); return null; }
 }
+// Último recurso: casa pelo texto. A legenda do post costuma começar com o mesmo título lançado na entrega.
+function textoSimples(t) { return String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim(); }
+function casaPeloTitulo(post, titulo) { const a = textoSimples(titulo); if (a.length < 15) return false; const b = textoSimples(post.message); return b.indexOf(a) >= 0; }
 // Facebook: lista só os posts da página perto da data da entrega e casa pelo link
-async function acharNoFacebook(graph, pagina, link, dataEntrega) {
+async function acharNoFacebook(graph, pagina, link, dataEntrega, titulo) {
   const params = { fields: "id,permalink_url,created_time,message,full_picture", limit: 100, access_token: pagina.access_token };
   if (dataEntrega) {
     const d = new Date(dataEntrega).getTime();
@@ -119,16 +122,19 @@ async function acharNoFacebook(graph, pagina, link, dataEntrega) {
   link = await resolverLinkFacebook(link);
   const pelaMidia = await postPelaMidia(graph, pagina, link); if (pelaMidia) return pelaMidia;
   const alvo = normalizarUrl(link); const idNoLink = idDoPostFacebook(link);
-  let j = await graph(`/${pagina.id}/posts`, params);
+  console.log("facebook: procurando", alvo, "id", idNoLink, "entre", params.since, params.until);
+  let j = await graph(`/${pagina.id}/posts`, params); let peloTitulo = null;
   for (let paginas = 0; paginas < 20; paginas++) {
     for (const p of j.data || []) {
       if (p.permalink_url && normalizarUrl(p.permalink_url) === alvo) return p;
       if (idNoLink && (p.id === idNoLink || p.id.split("_")[1] === idNoLink || (p.permalink_url || "").indexOf(idNoLink) >= 0)) return p;
+      if (!peloTitulo && casaPeloTitulo(p, titulo)) peloTitulo = p;
     }
-    if (!j.paging || !j.paging.next) return null;
+    if (!j.paging || !j.paging.next) break;
     j = await graph(j.paging.next);
   }
-  return null;
+  if (peloTitulo) console.log("facebook: achei pelo título", peloTitulo.permalink_url);
+  return peloTitulo;
 }
 async function insightsFacebook(graph, post, pagina) {
   const ins = {};
@@ -149,7 +155,7 @@ async function lerPost(token, entrega) {
     const m = await acharNoInstagram(graph, ig.id, cod, entrega.data);
     if (m) { novo = await insightsInstagram(graph, m); legenda = m.caption; urlImg = await imagemDoInstagram(graph, m); fonte = "instagram"; }
   } else {
-    const p = await acharNoFacebook(graph, pagina, link, entrega.data);
+    const p = await acharNoFacebook(graph, pagina, link, entrega.data, entrega.titulo);
     if (p) { novo = await insightsFacebook(graph, p, pagina); legenda = p.message; urlImg = p.full_picture; fonte = "facebook"; }
   }
   if (!novo) return { aviso: "Post não encontrado na conta da revista. Confira o link e a data da entrega." };

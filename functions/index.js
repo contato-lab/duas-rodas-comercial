@@ -37,7 +37,7 @@ exports.metaPost = onCall(
     const d = req.data || {};
     if (!d.link || typeof d.link !== "string") throw new HttpsError("invalid-argument", "Falta o link do post.");
     try {
-      return await meta.lerPost(META_TOKEN.value(), { link: d.link, data: d.data || null, imagem: d.temImagem ? "sim" : null, metricas: d.metricas || {} });
+      return await meta.lerPost(META_TOKEN.value(), { link: d.link, data: d.data || null, titulo: d.titulo || "", imagem: d.temImagem ? "sim" : null, metricas: d.metricas || {} });
     } catch (err) {
       console.error("metaPost", d.link, err);
       throw new HttpsError("internal", err && err.message ? err.message : "Falha ao ler o post.");
