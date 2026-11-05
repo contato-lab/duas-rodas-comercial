@@ -37,6 +37,9 @@ async function todasAsPaginas(caminho, params) {
 
 function codigoInstagram(url) { const m = /instagram\.com\/(?:[\w.]+\/)?(?:p|reel|reels|tv)\/([\w-]+)/.exec(url || ""); return m ? m[1] : null; }
 function ehFacebook(url) { return /facebook\.com|fb\.watch|fb\.com/.test(url || ""); }
+// A entrega pode ter vários links (outrosLinks): o robô lê cada um do Instagram/Facebook, guarda por link e soma no total
+function linksMeta(e) { return [{ rede: e.rede, url: e.link }].concat(e.outrosLinks || []).filter(l => l.url && (codigoInstagram(l.url) || ehFacebook(l.url))); }
+const CAMPOS = ["visualizacoes", "alcance", "curtidas", "comentarios", "compartilhamentos", "salvamentos"];
 function hojeISO() { return new Date().toISOString().slice(0, 10); }
 function diasEntre(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
 
@@ -146,32 +149,39 @@ async function main() {
   console.log(`Página: ${pagina.name} (${pagina.id})` + (ig ? ` · Instagram: @${ig.username}` : " · sem Instagram ligado"));
 
   const snap = await db.collection("entregas").get();
-  const alvo = snap.docs.map(d => ({ ref: d.ref, ...d.data() })).filter(e => e.produto === "post" && e.link && (codigoInstagram(e.link) || ehFacebook(e.link)));
-  const pendentes = alvo.filter(e => { const m = e.metricas || {}; if (!m.metaEm || !e.imagem || !e.legendaPost) return true; const idade = e.data ? diasEntre(e.data, hoje) : 999; const desde = diasEntre(m.metaEm, hoje); return idade <= DIAS_REFRESCO ? desde >= 1 : desde >= 7; });
+  const alvo = snap.docs.map(d => ({ ref: d.ref, ...d.data() })).filter(e => e.produto === "post" && linksMeta(e).length);
+  const pendentes = alvo.filter(e => { const m = e.metricas || {}; if (!m.metaEm || !e.imagem || !e.legendaPost) return true; if ((e.metricasPorLink || []).length !== linksMeta(e).length) return true; const idade = e.data ? diasEntre(e.data, hoje) : 999; const desde = diasEntre(m.metaEm, hoje); return idade <= DIAS_REFRESCO ? desde >= 1 : desde >= 7; });
   console.log(`${alvo.length} posts com link do Instagram ou Facebook, ${pendentes.length} para atualizar.`);
   if (!pendentes.length) { await estadoRef.set({ ultimaRodada: inicio.toISOString(), pagina: pagina.name, instagram: ig ? ig.username : null, posts: alvo.length, atualizados: 0, naoAchados: 0, erro: null }, { merge: true }); return; }
 
-  const precisaIg = pendentes.some(e => codigoInstagram(e.link)), precisaFb = pendentes.some(e => ehFacebook(e.link) && !codigoInstagram(e.link));
+  const todos = pendentes.flatMap(e => linksMeta(e).map(l => l.url));
+  const precisaIg = todos.some(u => codigoInstagram(u)), precisaFb = todos.some(u => ehFacebook(u) && !codigoInstagram(u));
   const mIg = precisaIg && ig ? await mapaInstagram(ig.id) : new Map();
   const mFb = precisaFb ? await mapaFacebook(pagina) : new Map();
 
   let atualizados = 0, naoAchados = 0, prints = 0; const faltando = [];
   for (const e of pendentes) {
     try {
-      let novo = null, legenda = null, urlImg = null; const cod = codigoInstagram(e.link);
-      if (cod) { const m = mIg.get(cod); if (m) { novo = await insightsInstagram(m); legenda = m.caption; if (!e.imagem) urlImg = await urlDaImagemIg(m); } }
-      else {
-        const real = await resolverLinkFacebook(e.link); let p = mFb.get(normalizarUrl(real)) || mFb.get(idDoPostFacebook(real)) || await postPelaMidia(graph, pagina, real);
-        if (!p) { p = [...new Set(mFb.values())].find(x => Math.abs(diasEntre(e.data, x.created_time.slice(0, 10))) <= 10 && casaPeloTitulo(x, e.titulo)) || null; console.log(p ? "achei pelo título:" : "não achei:", e.titulo, "| link virou", real.slice(0, 100)); }
-        if (p) { novo = await insightsFacebook(p, pagina); legenda = p.message; if (!e.imagem) urlImg = p.full_picture; } }
-      if (!novo) { naoAchados++; faltando.push(e.titulo || e.link); await e.ref.update({ "metricas.metaAviso": "Post não encontrado na conta da revista. Confira o link." }); continue; }
-      const metricas = Object.assign({}, e.metricas || {}); Object.entries(novo).forEach(([k, v]) => { if (v != null) metricas[k] = v; });
-      metricas.metaEm = hoje; metricas.fonte = cod ? "instagram" : "facebook"; delete metricas.metaAviso;
-      const mudar = { metricas };
+      const porLink = []; let legenda = null, urlImg = null;
+      for (const l of linksMeta(e)) {
+        let novo = null; const cod = codigoInstagram(l.url);
+        if (cod) { const m = mIg.get(cod); if (m) { novo = await insightsInstagram(m); if (legenda == null) legenda = m.caption; if (!e.imagem && !urlImg) urlImg = await urlDaImagemIg(m); } }
+        else {
+          const real = await resolverLinkFacebook(l.url); let p = mFb.get(normalizarUrl(real)) || mFb.get(idDoPostFacebook(real)) || await postPelaMidia(graph, pagina, real);
+          if (!p) { p = [...new Set(mFb.values())].find(x => Math.abs(diasEntre(e.data, x.created_time.slice(0, 10))) <= 10 && casaPeloTitulo(x, e.titulo)) || null; console.log(p ? "achei pelo título:" : "não achei:", e.titulo, "| link virou", real.slice(0, 100)); }
+          if (p) { novo = await insightsFacebook(p, pagina); if (legenda == null) legenda = p.message; if (!e.imagem && !urlImg) urlImg = p.full_picture; } }
+        if (novo) { const item = { rede: cod ? "instagram" : "facebook", url: l.url }; CAMPOS.forEach(k => { if (novo[k] != null) item[k] = novo[k]; }); porLink.push(item); }
+      }
+      if (!porLink.length) { naoAchados++; faltando.push(e.titulo || e.link); await e.ref.update({ "metricas.metaAviso": "Post não encontrado na conta da revista. Confira o link." }); continue; }
+      const metricas = Object.assign({}, e.metricas || {});
+      CAMPOS.forEach(k => { const v = porLink.map(p => p[k]).filter(x => x != null); if (v.length) metricas[k] = v.reduce((a, b) => a + b, 0); });
+      metricas.metaEm = hoje; metricas.fonte = [...new Set(porLink.map(p => p.rede))].join("+"); delete metricas.metaAviso;
+      if (porLink.length < linksMeta(e).length) metricas.metaAviso = "Um dos links não foi encontrado na conta da revista. O total soma só os que foram achados.";
+      const mudar = { metricas, metricasPorLink: porLink };
       const titulo = tituloDaLegenda(legenda); if (titulo && titulo !== e.legendaPost) mudar.legendaPost = titulo;
       if (urlImg) { try { const im = await imagemReduzida(urlImg); if (im) { mudar.imagem = im; mudar.imagemAuto = true; prints++; } } catch (err) { console.warn("sem print para", e.titulo || e.link, err.message); } }
       await e.ref.update(mudar); atualizados++;
-      console.log(`+ ${e.titulo || e.link}: ` + Object.entries(novo).filter(([k, v]) => v != null).map(([k, v]) => `${k} ${v}`).join(", "));
+      console.log(`+ ${e.titulo || e.link}: ` + porLink.map(p => p.rede + " " + CAMPOS.filter(k => p[k] != null).map(k => `${k} ${p[k]}`).join(", ")).join(" | "));
     } catch (err) { console.warn("falhou", e.titulo || e.link, err.message); }
   }
   await estadoRef.set({ ultimaRodada: inicio.toISOString(), pagina: pagina.name, instagram: ig ? ig.username : null, posts: alvo.length, atualizados, naoAchados, prints, faltando: faltando.slice(0, 20), erro: null }, { merge: true });

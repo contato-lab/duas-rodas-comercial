@@ -411,6 +411,7 @@ function linkExterno(url, texto) { if (!url) return '<span class="muted">—</sp
 // Entrega pode ter vários links, um por rede. O primeiro do Instagram/Facebook fica em link/rede, que é o que o robô do Meta e a leitura na hora usam
 function redePeloLink(u) { u = u || ""; return /instagram\.com/.test(u) ? "instagram" : /facebook\.com|fb\.watch|fb\.com/.test(u) ? "facebook" : /youtu\.?be/.test(u) ? "youtube" : /tiktok\.com/.test(u) ? "tiktok" : ""; }
 function linksDaEntrega(e) { return [{ rede: e.rede || "", url: e.link || "" }].concat(e.outrosLinks || []).filter(function (l) { return l.url; }); }
+function porRedeTexto(e) { var pl = e.metricasPorLink || []; if (pl.length < 2) return ""; return "<br>Os campos abaixo são o total. Por rede: " + pl.map(function (p) { return "<b>" + esc(REDES[p.rede] || p.rede) + "</b> " + [p.alcance != null ? fmtNum(p.alcance) + " de alcance" : "", p.visualizacoes != null ? fmtNum(p.visualizacoes) + " visualizações" : "", p.curtidas != null ? fmtNum(p.curtidas) + " curtidas" : ""].filter(Boolean).join(", "); }).join(" · ") + "."; }
 function linksDoForm(f) { var lista = []; Object.keys(f).forEach(function (k) { var m = k.match(/^lk_url_(\d+)$/); if (m) lista[+m[1]] = { rede: f["lk_rede_" + m[1]] || "", url: f[k] }; }); return lista.filter(Boolean); }
 function guardarLinks(it, lista) {
   lista = lista.filter(function (l) { return l.url; }).map(function (l) { return { rede: l.rede || redePeloLink(l.url) || "outro", url: l.url }; });
@@ -1264,7 +1265,7 @@ function formEntrega(d) {
   var m = e.metricas || {};
   var auts = opcoesAuts(e.marcaId, "Sem autorização (não conta na cota)");
   var metricas = "";
-  if (e.produto === "post") metricas = (m.metaEm ? '<div class="alerta-box ok">' + icone("chart") + '<span class="t">Números lidos do ' + (m.fonte === "facebook" ? "Facebook" : "Instagram") + " em " + fmtDataCurta(m.metaEm) + ". O robô atualiza sozinho; o que você digitar aqui vale até a próxima leitura.</span></div>" : (m.metaAviso ? '<div class="alerta-box alerta">' + icone("info") + '<span class="t">' + esc(m.metaAviso) + "</span></div>" : "")) + '<div class="grid g3">' + campo("Visualizações", input("m_visualizacoes", m.visualizacoes, "number")) + campo("Alcance (contas)", input("m_alcance", m.alcance, "number")) + campo("Curtidas", input("m_curtidas", m.curtidas, "number")) + campo("Comentários", input("m_comentarios", m.comentarios, "number")) + campo("Compartilhamentos", input("m_compartilhamentos", m.compartilhamentos, "number")) + campo("Salvamentos", input("m_salvamentos", m.salvamentos, "number")) + "</div>";
+  if (e.produto === "post") metricas = (m.metaEm ? '<div class="alerta-box ok">' + icone("chart") + '<span class="t">Números lidos do ' + String(m.fonte || "instagram").split("+").map(function (r) { return REDES[r] || r; }).join(" e ") + " em " + fmtDataCurta(m.metaEm) + ". O robô atualiza sozinho; o que você digitar aqui vale até a próxima leitura." + porRedeTexto(e) + "</span></div>" : (m.metaAviso ? '<div class="alerta-box alerta">' + icone("info") + '<span class="t">' + esc(m.metaAviso) + "</span></div>" : "")) + '<div class="grid g3">' + campo("Visualizações", input("m_visualizacoes", m.visualizacoes, "number")) + campo("Alcance (contas)", input("m_alcance", m.alcance, "number")) + campo("Curtidas", input("m_curtidas", m.curtidas, "number")) + campo("Comentários", input("m_comentarios", m.comentarios, "number")) + campo("Compartilhamentos", input("m_compartilhamentos", m.compartilhamentos, "number")) + campo("Salvamentos", input("m_salvamentos", m.salvamentos, "number")) + "</div>";
   else if (e.produto === "email") metricas = '<div class="grid g3">' + campo("Base disparada", input("m_base", m.base, "number")) + campo("Aberturas", input("m_aberturas", m.aberturas, "number")) + campo("Cliques", input("m_cliques", m.cliques, "number")) + "</div>";
   else if (e.produto === "banner") metricas = '<div class="grid g2">' + campo("Impressões no mês", input("m_impressoes", m.impressoes, "number", "required"), "Soma na cota de impressões") + campo("Mês de referência", input("mes", e.mes || mesChave(e.data), "month")) + "</div>";
   else if (e.produto === "revista") metricas = '<div class="grid g3">' + campo("Edição / mês", input("mes", e.mes || mesChave(e.data), "month")) + campo("Quantidade de páginas", input("quantidade", e.quantidade || 1, "number", 'min="1"'), "Soma na cota") + campo("Formato", select("formato", [["simples", "Simples"], ["dupla", "Dupla"], ["capa", "Capa / contracapa"]], e.formato || "simples")) + "</div>";
@@ -1517,9 +1518,11 @@ function aoSubmeter(ev) {
     item.metricas = {}; Object.keys(f).forEach(function (k) { if (k.indexOf("m_") === 0 && f[k] !== "") item.metricas[k.slice(2)] = num(f[k]); });
     if (!item.marcaId) return toast("Escolha a marca.", true);
     var linkMudou = !d.item || (d.item.link || "") !== (item.link || "");
+    var chaveLinks = function (x) { return linksDaEntrega(x || {}).map(function (l) { return l.url; }).join(" "); };
+    if (d.item && chaveLinks(d.item) !== chaveLinks(item)) delete item.metricasPorLink;
     if (linkMudou) { delete item.legendaPost; if (item.imagemAuto) { item.imagem = null; delete item.imagemAuto; } }
     return salvar("entregas", item, item.status === "agendado" ? "Entrega programada para " + fmtDataExtensa(item.data) + "." : "Entrega registrada.").then(function () {
-      if (item.produto === "post" && item.link && item.status !== "agendado") lerPostAgora(item);
+      if (item.produto === "post" && item.status !== "agendado") lerPostAgora(item);
       var fila = S.d.fila.filter(function (x) { return x.entregaId === item.id; })[0];
       if (fila && item.status !== "agendado" && fila.status !== "publicado") { fila.status = "publicado"; API.salvar("fila", fila).then(render); }
     });
@@ -1722,21 +1725,41 @@ function aoMudar(ev) {
 function arquivoBase64(file) {
   return new Promise(function (ok, erro) { var fr = new FileReader(); fr.onload = function () { var u = String(fr.result); ok({ data: u.slice(u.indexOf(",") + 1), mime: file.type || "application/pdf" }); }; fr.onerror = function () { erro(new Error("Não consegui abrir o arquivo.")); }; fr.readAsDataURL(file); });
 }
-// Post com link: lê números, print e título na hora pela função metaPost, sem esperar o robô das 06h30
+// Post com link: lê números, print e título na hora pela função metaPost, sem esperar o robô das 06h30.
+// Com vários links (Instagram e Facebook), lê um por um, guarda por link e soma no total
+var CAMPOS_META = ["visualizacoes", "alcance", "curtidas", "comentarios", "compartilhamentos", "salvamentos"];
+function ehLinkMeta(u) { return /instagram\.com|facebook\.com|fb\.watch|fb\.com/.test(u || ""); }
 function lerPostAgora(item) {
   if (!API || !API.metaPost) return;
-  toast("Lendo o post no Instagram/Facebook...");
-  return API.metaPost({ link: item.link, data: item.data, titulo: item.titulo || "", temImagem: !!item.imagem, metricas: item.metricas || {} }).then(function (r) {
+  var links = linksDaEntrega(item).filter(function (l) { return ehLinkMeta(l.url); }); if (!links.length) return;
+  var chave = links.map(function (l) { return l.url; }).join(" ");
+  toast("Lendo " + (links.length > 1 ? links.length + " posts" : "o post") + " no Instagram/Facebook...");
+  var lidos = [];
+  return links.reduce(function (p, l, i) {
+    return p.then(function () {
+      return API.metaPost({ link: l.url, data: item.data, titulo: item.titulo || "", temImagem: !!item.imagem || i > 0, metricas: {} }).then(function (r) { lidos.push({ l: l, r: r }); }).catch(function (e) { lidos.push({ l: l, erro: e }); });
+    });
+  }, Promise.resolve()).then(function () {
     var novo = clone(byId(S.d.entregas, item.id) || item);
-    if (novo.link !== item.link) return;
-    if (r.aviso) { novo.metricas = Object.assign({}, novo.metricas || {}, { metaAviso: r.aviso }); toast(r.aviso, true); }
-    else {
-      novo.metricas = r.metricas; if (r.legendaPost) novo.legendaPost = r.legendaPost;
-      if (r.imagem && !novo.imagem) { novo.imagem = r.imagem; novo.imagemAuto = true; }
-      var m = r.metricas || {}; toast("Post lido: " + [m.visualizacoes != null ? fmtNum(m.visualizacoes) + " visualizações" : "", m.alcance != null ? fmtNum(m.alcance) + " de alcance" : "", m.curtidas != null ? fmtNum(m.curtidas) + " curtidas" : ""].filter(Boolean).join(", ") + (r.imagem ? ". Print e título gravados." : "."));
+    if (linksDaEntrega(novo).filter(function (l) { return ehLinkMeta(l.url); }).map(function (l) { return l.url; }).join(" ") !== chave) return;
+    var ok = lidos.filter(function (x) { return x.r && !x.r.aviso; });
+    if (!ok.length) {
+      var falha = lidos[0] || {}; var msg = falha.r && falha.r.aviso ? falha.r.aviso : ((falha.erro && falha.erro.message) || "falha");
+      if (/not-found|NOT_FOUND|404/.test(msg)) return;
+      if (falha.r && falha.r.aviso) { novo.metricas = Object.assign({}, novo.metricas || {}, { metaAviso: msg }); toast(msg, true); return API.salvar("entregas", novo).then(render); }
+      return toast("Não consegui ler o post agora (" + msg + "). O robô tenta de novo às 06h30.", true);
     }
+    var porLink = ok.map(function (x) { var m = x.r.metricas || {}; var it = { rede: m.fonte || redePeloLink(x.l.url), url: x.l.url }; CAMPOS_META.forEach(function (k) { if (m[k] != null) it[k] = m[k]; }); return it; });
+    var tot = Object.assign({}, novo.metricas || {});
+    CAMPOS_META.forEach(function (k) { var v = porLink.map(function (p) { return p[k]; }).filter(function (x) { return x != null; }); if (v.length) tot[k] = v.reduce(function (a, b) { return a + b; }, 0); });
+    tot.metaEm = hojeISO(); tot.fonte = porLink.map(function (p) { return p.rede; }).filter(function (r, i, a) { return a.indexOf(r) === i; }).join("+"); delete tot.metaAviso;
+    if (porLink.length < links.length) tot.metaAviso = "Um dos links não foi encontrado na conta da revista. O total soma só os que foram achados.";
+    novo.metricas = tot; novo.metricasPorLink = porLink;
+    var primeiro = ok[0].r; if (primeiro.legendaPost) novo.legendaPost = primeiro.legendaPost;
+    if (primeiro.imagem && !novo.imagem) { novo.imagem = primeiro.imagem; novo.imagemAuto = true; }
+    toast((porLink.length > 1 ? porLink.length + " posts lidos, total: " : "Post lido: ") + [tot.visualizacoes != null ? fmtNum(tot.visualizacoes) + " visualizações" : "", tot.alcance != null ? fmtNum(tot.alcance) + " de alcance" : "", tot.curtidas != null ? fmtNum(tot.curtidas) + " curtidas" : ""].filter(Boolean).join(", ") + (primeiro.imagem ? ". Print e título gravados." : "."));
     return API.salvar("entregas", novo).then(render);
-  }).catch(function (e) { var msg = (e && e.message) || "falha"; if (/not-found|NOT_FOUND|404/.test(msg)) return; toast("Não consegui ler o post agora (" + msg + "). O robô tenta de novo às 06h30.", true); });
+  });
 }
 function chamarIA(pedido) {
   if (!API || !API.ia) return Promise.reject(new Error("A leitura com IA precisa do Firebase ligado."));

@@ -65,13 +65,18 @@ function legendaComLink(titulo, links) {
 }
 function qtd(n, um, varios) { return fmtNum(n) + " " + (+n === 1 ? um : varios); }
 function caixaMetrica(titulo, linhas) { return '<div class="metrica"><span class="rotulo">' + esc(titulo) + "</span><div>" + linhas.map(function (l) { return "<span>" + esc(l) + "</span>"; }).join("") + "</div></div>"; }
+// Com mais de um link lido (Instagram e Facebook), as caixas mostram o total e esta mostra quanto veio de cada rede
+function caixaPorRede(e) {
+  var pl = e.metricasPorLink || []; if (pl.length < 2) return "";
+  return caixaMetrica("POR REDE", pl.map(function (p) { var inter = ["curtidas", "comentarios", "compartilhamentos", "salvamentos"].reduce(function (t, k) { return t + (+p[k] || 0); }, 0); return (p.rede === "facebook" ? "FACEBOOK" : "INSTAGRAM") + ": " + [p.alcance != null ? fmtNum(p.alcance) + " DE ALCANCE" : (p.visualizacoes != null ? fmtNum(p.visualizacoes) + " VISUALIZAÇÕES" : ""), inter ? qtd(inter, "INTERAÇÃO", "INTERAÇÕES") : ""].filter(Boolean).join(" · "); }));
+}
 function slidePost(d, e) {
   var m = e.metricas || {}; var esq = [], dir = [];
   if (m.visualizacoes != null) esq.push(qtd(m.visualizacoes, "VISUALIZAÇÃO", "VISUALIZAÇÕES")); if (m.alcance != null) esq.push(qtd(m.alcance, "CONTA ALCANÇADA", "CONTAS ALCANÇADAS"));
   if (m.curtidas != null) dir.push(qtd(m.curtidas, "CURTIDA", "CURTIDAS")); if (m.comentarios != null) dir.push(qtd(m.comentarios, "COMENTÁRIO", "COMENTÁRIOS")); if (m.compartilhamentos != null) dir.push(qtd(m.compartilhamentos, "COMPARTILHAMENTO", "COMPARTILHAMENTOS")); if (m.salvamentos != null) dir.push(qtd(m.salvamentos, "SALVAMENTO", "SALVAMENTOS"));
   var img = e.imagem ? '<div class="print"><img src="' + esc(e.imagem) + '" alt=""></div>' : '<div class="print vazio"><span>Print do post</span></div>';
   return { descricao: "Post " + fmtData(e.data) + ": " + (e.titulo || "sem título"), html: '<section class="slide item">' + faixaTitulo(d.marca.nome, "POSTS", "PUBLICIDADE", e.data) +
-    '<div class="corpo">' + img + '<div class="metricas">' + (esq.length ? caixaMetrica("ALCANCE", esq) : "") + (dir.length ? caixaMetrica("INTERAÇÕES", dir) : "") + (!esq.length && !dir.length ? caixaMetrica("PUBLICADO", [fmtData(e.data), linksDe(e).map(redeDoLink).filter(Boolean).join(" E ") || (e.rede ? e.rede.replace("_", " e ").toUpperCase() : "")]) : "") + "</div></div>" +
+    '<div class="corpo">' + img + '<div class="metricas">' + (esq.length ? caixaMetrica("ALCANCE", esq) : "") + (dir.length ? caixaMetrica("INTERAÇÕES", dir) : "") + caixaPorRede(e) + (!esq.length && !dir.length ? caixaMetrica("PUBLICADO", [fmtData(e.data), linksDe(e).map(redeDoLink).filter(Boolean).join(" E ") || (e.rede ? e.rede.replace("_", " e ").toUpperCase() : "")]) : "") + "</div></div>" +
     legendaComLink(e.legendaPost || e.titulo, linksDe(e)) + "</section>" };
 }
 function slideBrand(d, b) {
