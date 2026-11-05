@@ -489,3 +489,7 @@ html[data-tema="escuro"] .ano-cel.cheia.post{background:#1E3A8A;color:#BFDBFE}ht
 .anexo .nome{flex:1;min-width:0;display:flex;align-items:center;gap:6px;overflow:hidden;white-space:nowrap}
 .anexo .nome a{overflow:hidden;text-overflow:ellipsis;color:var(--fg)}
 .anexo.enviando{opacity:.75;padding-right:10px}
+
+.links-entrega{display:flex;flex-direction:column;gap:8px}
+.link-linha{display:grid;grid-template-columns:170px 1fr auto;gap:8px;align-items:center}
+@media (max-width:600px){.link-linha{grid-template-columns:120px 1fr auto}}

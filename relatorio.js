@@ -53,14 +53,15 @@ function slideDestaques(d) {
     d.destaques.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul></section>" };
 }
 // Título clicável + botão que abre o post na rede (vale também no PDF salvo pelo Chrome)
-function redeDoLink(u) { return /instagram\.com/.test(u) ? "INSTAGRAM" : (/youtu\.?be/.test(u) ? "YOUTUBE" : (/facebook\.com|fb\.watch|fb\.com/.test(u) ? "FACEBOOK" : "")); }
-function legendaComLink(titulo, link) {
+function redeDoLink(u) { return /instagram\.com/.test(u) ? "INSTAGRAM" : (/youtu\.?be/.test(u) ? "YOUTUBE" : (/facebook\.com|fb\.watch|fb\.com/.test(u) ? "FACEBOOK" : (/tiktok\.com/.test(u) ? "TIKTOK" : ""))); }
+// A entrega pode ter vários links (um por rede): um botão para cada, até 3
+function linksDe(e) { return [e.link].concat((e.outrosLinks || []).map(function (l) { return l.url; })).filter(function (u) { return /^https?:\/\//.test(u || ""); }); }
+function legendaComLink(titulo, links) {
   titulo = String(titulo || "").replace(/[\u2122\u00AE\u00A9]/g, "").replace(/\s{2,}/g, " ").trim();
-  var ok = /^https?:\/\//.test(link || "");
-  if (!ok) return titulo ? '<div class="legenda">' + esc(titulo.toUpperCase()) + "</div>" : "";
-  var rede = redeDoLink(link);
-  return (titulo ? '<a class="legenda" href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(titulo.toUpperCase()) + "</a>" : "") +
-    '<a class="ver-post" href="' + esc(link) + '" target="_blank" rel="noopener">' + (rede ? "VER NO " + rede : "VER O POST") + " &#8599;</a>";
+  links = (Array.isArray(links) ? links : [links]).filter(function (u) { return /^https?:\/\//.test(u || ""); }).slice(0, 3);
+  if (!links.length) return titulo ? '<div class="legenda">' + esc(titulo.toUpperCase()) + "</div>" : "";
+  return (titulo ? '<a class="legenda" href="' + esc(links[0]) + '" target="_blank" rel="noopener">' + esc(titulo.toUpperCase()) + "</a>" : "") +
+    '<div class="ver-posts">' + links.map(function (u) { var rede = redeDoLink(u); return '<a class="ver-post" href="' + esc(u) + '" target="_blank" rel="noopener">' + (rede ? "VER NO " + rede : (links.length > 1 ? "VER NO SITE" : "VER O POST")) + " &#8599;</a>"; }).join("") + "</div>";
 }
 function qtd(n, um, varios) { return fmtNum(n) + " " + (+n === 1 ? um : varios); }
 function caixaMetrica(titulo, linhas) { return '<div class="metrica"><span class="rotulo">' + esc(titulo) + "</span><div>" + linhas.map(function (l) { return "<span>" + esc(l) + "</span>"; }).join("") + "</div></div>"; }
@@ -70,8 +71,8 @@ function slidePost(d, e) {
   if (m.curtidas != null) dir.push(qtd(m.curtidas, "CURTIDA", "CURTIDAS")); if (m.comentarios != null) dir.push(qtd(m.comentarios, "COMENTÁRIO", "COMENTÁRIOS")); if (m.compartilhamentos != null) dir.push(qtd(m.compartilhamentos, "COMPARTILHAMENTO", "COMPARTILHAMENTOS")); if (m.salvamentos != null) dir.push(qtd(m.salvamentos, "SALVAMENTO", "SALVAMENTOS"));
   var img = e.imagem ? '<div class="print"><img src="' + esc(e.imagem) + '" alt=""></div>' : '<div class="print vazio"><span>Print do post</span></div>';
   return { descricao: "Post " + fmtData(e.data) + ": " + (e.titulo || "sem título"), html: '<section class="slide item">' + faixaTitulo(d.marca.nome, "POSTS", "PUBLICIDADE", e.data) +
-    '<div class="corpo">' + img + '<div class="metricas">' + (esq.length ? caixaMetrica("ALCANCE", esq) : "") + (dir.length ? caixaMetrica("INTERAÇÕES", dir) : "") + (!esq.length && !dir.length ? caixaMetrica("PUBLICADO", [fmtData(e.data), e.rede ? e.rede.replace("_", " e ").toUpperCase() : ""]) : "") + "</div></div>" +
-    legendaComLink(e.legendaPost || e.titulo, e.link) + "</section>" };
+    '<div class="corpo">' + img + '<div class="metricas">' + (esq.length ? caixaMetrica("ALCANCE", esq) : "") + (dir.length ? caixaMetrica("INTERAÇÕES", dir) : "") + (!esq.length && !dir.length ? caixaMetrica("PUBLICADO", [fmtData(e.data), linksDe(e).map(redeDoLink).filter(Boolean).join(" E ") || (e.rede ? e.rede.replace("_", " e ").toUpperCase() : "")]) : "") + "</div></div>" +
+    legendaComLink(e.legendaPost || e.titulo, linksDe(e)) + "</section>" };
 }
 function slideBrand(d, b) {
   var yt = youtubeId(b.links && b.links.youtube); var ent = d.entregas.filter(function (e) { return e.produto === "brand" && (e.link === (b.links || {}).youtube || e.titulo === b.titulo); })[0];
@@ -129,7 +130,7 @@ var CSS = '@import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&fami
   ".print.vazio{height:450px;display:flex;align-items:center;justify-content:center;color:#666;font-family:'Bebas Neue',Impact,sans-serif;font-size:40px;border:2px dashed #333}" +
   ".metricas{display:flex;flex-direction:row;flex-wrap:wrap;gap:40px 36px;padding-top:70px;align-items:flex-start}" +
   ".metrica{border:3px solid #fff;padding:34px 28px 22px;min-width:360px;position:relative;margin-top:20px}.metrica .rotulo{position:absolute;left:-3px;top:-34px;background:" + VERMELHO + ";padding:6px 30px 6px 14px;font-weight:800;font-size:28px;text-transform:uppercase}.metrica div{display:flex;flex-direction:column;gap:4px;font-family:'Bebas Neue',Impact,sans-serif;font-size:36px;line-height:1.15}" +
-  ".legenda{position:absolute;left:0;right:0;bottom:92px;color:#fff;display:block;text-align:center;font-family:'Bebas Neue',Impact,sans-serif;font-size:36px;text-decoration:underline;text-underline-offset:6px;padding:0 200px}.ver-post{position:absolute;left:50%;transform:translateX(-50%);bottom:30px;background:" + VERMELHO + ";color:#fff;text-decoration:none;font-family:'Bebas Neue',Impact,sans-serif;font-size:26px;letter-spacing:1px;padding:6px 22px 4px}" +
+  ".legenda{position:absolute;left:0;right:0;bottom:92px;color:#fff;display:block;text-align:center;font-family:'Bebas Neue',Impact,sans-serif;font-size:36px;text-decoration:underline;text-underline-offset:6px;padding:0 200px}.ver-posts{position:absolute;left:0;right:0;bottom:30px;display:flex;justify-content:center;gap:16px}.ver-post{background:" + VERMELHO + ";color:#fff;text-decoration:none;font-family:'Bebas Neue',Impact,sans-serif;font-size:26px;letter-spacing:1px;padding:6px 22px 4px}" +
   ".caixas{position:absolute;left:220px;right:150px;top:400px;display:grid;grid-template-columns:repeat(3,1fr);gap:70px 60px;align-content:start}.caixas.quatro{grid-template-columns:repeat(4,1fr);gap:70px 60px}.caixas.muitas{grid-template-columns:repeat(4,1fr);gap:54px 40px;top:380px}.caixas.muitas .cx{min-height:96px;padding:34px 22px 16px}.caixas.muitas .cx div{font-size:30px}.caixas.muitas .cx .rot{font-size:24px;top:-28px}" +
   ".cx{border:3px solid #fff;padding:40px 28px 26px;position:relative;min-height:150px}.cx .rot{position:absolute;left:-3px;top:-32px;background:" + VERMELHO + ";padding:6px 30px 6px 14px;font-weight:800;font-size:28px}.cx div{font-family:'Bebas Neue',Impact,sans-serif;font-size:36px;line-height:1.15}" +
   ".lateral{position:absolute;left:0;top:0;bottom:0;width:120px;background:repeating-linear-gradient(135deg,#fff 0 30px,#000 30px 70px)}.lateral~.faixa{left:230px}.lateral~.tit{left:230px}" +

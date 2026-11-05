@@ -46,7 +46,7 @@ var CHECKLIST = {
   brand:   [["material", "Produto ou moto combinados"], ["tema", "Tema aprovado"]]
 };
 var ORIGENS = { whatsapp: "WhatsApp", email: "E-mail", drive: "Drive", outro: "Outro" };
-var REDES = { instagram: "Instagram", facebook: "Facebook", instagram_facebook: "Instagram e Facebook", youtube: "YouTube", site: "Site", email: "E-mail" };
+var REDES = { instagram: "Instagram", facebook: "Facebook", instagram_facebook: "Instagram e Facebook", youtube: "YouTube", tiktok: "TikTok", site: "Site", email: "E-mail", outro: "Outro" };
 var NAV = [
   { to: "/inicio",        label: "Visão geral",    curto: "Início",    icone: "layout-dashboard" },
   { to: "/marcas",        label: "Marcas",         curto: "Marcas",    icone: "building" },
@@ -408,6 +408,22 @@ function select(name, opcoes, valor, extra) { return '<select class="select" nam
 function opcoesMarcas(comVazio) { var o = comVazio ? [["", comVazio]] : []; S.d.marcas.slice().sort(porNome).forEach(function (m) { o.push([m.id, m.nome]); }); return o; }
 function opcoesAuts(mid, comVazio) { var o = comVazio ? [["", comVazio]] : []; (mid ? autsDaMarca(mid) : S.d.autorizacoes.slice()).forEach(function (a) { o.push([a.id, (mid ? "" : nomeMarca(a.marcaId) + " · ") + rotuloAut(a) + " (" + situacaoAut(a).nome + ")"]); }); return o; }
 function linkExterno(url, texto) { if (!url) return '<span class="muted">—</span>'; return '<a href="' + attr(url) + '" target="_blank" rel="noopener" class="row" style="gap:4px;display:inline-flex">' + esc(texto || url.replace(/^https?:\/\//, "").slice(0, 40)) + icone("external-link", "") + "</a>"; }
+// Entrega pode ter vários links, um por rede. O primeiro do Instagram/Facebook fica em link/rede, que é o que o robô do Meta e a leitura na hora usam
+function redePeloLink(u) { u = u || ""; return /instagram\.com/.test(u) ? "instagram" : /facebook\.com|fb\.watch|fb\.com/.test(u) ? "facebook" : /youtu\.?be/.test(u) ? "youtube" : /tiktok\.com/.test(u) ? "tiktok" : ""; }
+function linksDaEntrega(e) { return [{ rede: e.rede || "", url: e.link || "" }].concat(e.outrosLinks || []).filter(function (l) { return l.url; }); }
+function linksDoForm(f) { var lista = []; Object.keys(f).forEach(function (k) { var m = k.match(/^lk_url_(\d+)$/); if (m) lista[+m[1]] = { rede: f["lk_rede_" + m[1]] || "", url: f[k] }; }); return lista.filter(Boolean); }
+function guardarLinks(it, lista) {
+  lista = lista.filter(function (l) { return l.url; }).map(function (l) { return { rede: l.rede || redePeloLink(l.url) || "outro", url: l.url }; });
+  var i = lista.map(function (l) { return /instagram\.com|facebook\.com|fb\.watch/.test(l.url); }).indexOf(true);
+  if (i > 0) lista.unshift(lista.splice(i, 1)[0]);
+  it.link = lista.length ? lista[0].url : ""; it.rede = lista.length ? lista[0].rede : null; it.outrosLinks = lista.slice(1);
+}
+function camposLinks(e) {
+  var linhas = e._linhas || linksDaEntrega(e); if (!linhas.length) linhas = [{ rede: "", url: "" }];
+  var ops = function (v) { return [["", "Rede"]].concat(Object.keys(REDES).filter(function (k) { return k !== "instagram_facebook" || v === k; }).map(function (k) { return [k, REDES[k]]; })); };
+  return '<div class="campo"><label>Links</label><div class="links-entrega">' + linhas.map(function (l, i) { return '<div class="link-linha">' + select("lk_rede_" + i, ops(l.rede), l.rede) + input("lk_url_" + i, l.url, "url", 'placeholder="https://"') + (linhas.length > 1 ? '<button type="button" class="btn icone fantasma" data-acao="tirar-link-entrega" data-i="' + i + '" title="Tirar este link">' + icone("x") + "</button>" : "") + "</div>"; }).join("") + "</div>" +
+    '<div class="row">' + botao("Adicionar link", "p fantasma", 'data-acao="add-link-entrega"', "plus") + '<span class="ajuda">Um link por rede. Se não escolher, a rede é reconhecida pelo link.</span></div></div>';
+}
 
 /* ============================================================ tela: início */
 /* situação de cada marca para o semáforo: vencida com saldo > atrasada > em dia > sem cotas */
@@ -571,8 +587,8 @@ function painelProduto(m, a, p) {
   } else {
     var ents = S.d.entregas.filter(function (e) { return e.marcaId === m.id && e.produto === p && (!a || e.autorizacaoId === a.id || !e.autorizacaoId); }).sort(function (x, y) { return String(y.data).localeCompare(String(x.data)); });
     var cols = p === "post" ? ["Rede", "Views", "Alcance", "Curtidas"] : p === "email" ? ["Base", "Aberturas", "Cliques"] : p === "banner" ? ["Mês", "Impressões"] : ["Edição", "Páginas", "Formato"];
-    function cel(e) { var mm = e.metricas || {}; if (p === "post") return [REDES[e.rede] || e.rede || "", fmtNum(mm.visualizacoes), fmtNum(mm.alcance), fmtNum(mm.curtidas)]; if (p === "email") return [fmtNum(mm.base), fmtNum(mm.aberturas), fmtNum(mm.cliques)]; if (p === "banner") return [nomeMesCurto(e.mes || mesChave(e.data)), fmtNum(mm.impressoes)]; return [nomeMesCurto(e.mes || mesChave(e.data)), String(e.quantidade || 1), e.formato || ""]; }
-    corpo = ents.length ? '<div class="tabela-wrap"><table class="tabela"><thead><tr><th>Data</th><th>Título</th>' + cols.map(function (x) { return "<th>" + x + "</th>"; }).join("") + "<th></th></tr></thead><tbody>" + ents.map(function (e) { return '<tr class="clicavel" data-acao="editar-entrega" data-id="' + attr(e.id) + '"><td class="nowrap mono">' + fmtData(e.data) + (e.status === "agendado" ? '<div class="small" style="color:var(--info)">programado</div>' : "") + "</td><td>" + esc(e.titulo || "") + (!e.autorizacaoId ? ' <span class="small muted">(fora da cota)</span>' : "") + "</td>" + cel(e).map(function (v) { return '<td class="small">' + esc(v === "0" ? "" : v) + "</td>"; }).join("") + "<td>" + linkExterno(e.link, "abrir") + "</td></tr>"; }).join("") + "</tbody></table></div>" : '<div class="vazio">Nenhuma entrega de ' + esc(PRODUTOS[p].nome.toLowerCase()) + " registrada nesta autorização.</div>";
+    function cel(e) { var mm = e.metricas || {}; if (p === "post") return [linksDaEntrega(e).map(function (l) { return REDES[l.rede] || l.rede; }).join(" + ") || REDES[e.rede] || "", fmtNum(mm.visualizacoes), fmtNum(mm.alcance), fmtNum(mm.curtidas)]; if (p === "email") return [fmtNum(mm.base), fmtNum(mm.aberturas), fmtNum(mm.cliques)]; if (p === "banner") return [nomeMesCurto(e.mes || mesChave(e.data)), fmtNum(mm.impressoes)]; return [nomeMesCurto(e.mes || mesChave(e.data)), String(e.quantidade || 1), e.formato || ""]; }
+    corpo = ents.length ? '<div class="tabela-wrap"><table class="tabela"><thead><tr><th>Data</th><th>Título</th>' + cols.map(function (x) { return "<th>" + x + "</th>"; }).join("") + "<th></th></tr></thead><tbody>" + ents.map(function (e) { return '<tr class="clicavel" data-acao="editar-entrega" data-id="' + attr(e.id) + '"><td class="nowrap mono">' + fmtData(e.data) + (e.status === "agendado" ? '<div class="small" style="color:var(--info)">programado</div>' : "") + "</td><td>" + esc(e.titulo || "") + (!e.autorizacaoId ? ' <span class="small muted">(fora da cota)</span>' : "") + "</td>" + cel(e).map(function (v) { return '<td class="small">' + esc(v === "0" ? "" : v) + "</td>"; }).join("") + "<td>" + (linksDaEntrega(e).length ? linksDaEntrega(e).map(function (l) { return linkExterno(l.url, REDES[l.rede] || "abrir"); }).join("<br>") : linkExterno("")) + "</td></tr>"; }).join("") + "</tbody></table></div>" : '<div class="vazio">Nenhuma entrega de ' + esc(PRODUTOS[p].nome.toLowerCase()) + " registrada nesta autorização.</div>";
   }
   return cab + '<div class="mt3 mb3">' + ritmo + "</div>" + corpo;
 }
@@ -1257,8 +1273,7 @@ function formEntrega(d) {
     '<div class="grid g2">' + campo("Marca", select("marcaId", opcoesMarcas("Escolha"), e.marcaId, 'required data-filtro="entregaFormMarca"')) + campo("Autorização", select("autorizacaoId", auts, e.autorizacaoId)) + "</div>" +
     '<div class="grid g3">' + campo("Produto", select("produto", ORDEM_PRODUTOS.map(function (p) { return [p, PRODUTOS[p].nome]; }), e.produto, 'data-filtro="entregaFormProduto"')) + campo("Data", input("data", e.data, "date", "required")) + campo("Situação", select("status", [["publicado", "Publicado"], ["agendado", "Programado"]], e.status)) + "</div>" +
     campo("Título ou descrição", input("titulo", e.titulo, "text", 'placeholder="Ex.: AGV e Dainese com nova distribuição no Brasil"')) +
-    (e.produto === "post" ? campo("Rede", select("rede", Object.keys(REDES).map(function (k) { return [k, REDES[k]]; }), e.rede)) : "") +
-    campo("Link", input("link", e.link, "url")) + metricas +
+    camposLinks(e) + metricas +
     campo("Print para o relatório", '<div class="colar-print' + (e.imagem ? " com-imagem" : "") + '">' + (e.imagem ? '<img src="' + attr(e.imagem) + '" alt="">' : '<span class="muted">' + icone("upload", "ic") + ' Tire o print e cole aqui com <b>Cmd + V</b> (ou arraste a imagem)</span>') + '<div class="row"><label class="btn p">' + icone("upload") + (e.imagem ? "Trocar" : "Escolher arquivo") + '<input type="file" accept="image/*" class="sr-only" data-acao-arquivo="imagem-entrega"></label>' + (e.imagem ? botao("Tirar", "p fantasma", 'data-acao="tirar-imagem"') : "") + '</div></div><input type="hidden" name="imagem" value="' + attr(e.imagem || "") + '">', "Print do post, dos Insights ou da página. Fica guardado com a entrega e entra na tela do relatório.") + ((e.produto === "post" || e.produto === "brand") && e.imagem ? '<div class="row mt1">' + botao("Ler números do print", "p", 'data-acao="ia-print"', "sparkles") + '<span class="small muted">Cole o print da tela de estatísticas (Insights) e o Claude preenche os números.</span></div>' : "") +
     campo("Observações", textarea("obs", e.obs)) +
     "</div>" + peForm("Salvar entrega", e.id ? 'data-acao="apagar-entrega" data-id="' + attr(e.id) + '"' : "") + "</form>";
@@ -1498,7 +1513,7 @@ function aoSubmeter(ev) {
     return API.salvar("brands", item).then(function () { return etapaAntes !== item.etapa ? sincronizarEdicaoDoBrand(item) : null; }).then(function () { toast("Brand salvo."); S.dialogo = null; render(); }).catch(function (e) { toast("Não salvou: " + e.message, true); });
   }
   if (tipo === "entrega") {
-    item.id = item.id || uid("ent"); item.marcaId = f.marcaId; item.autorizacaoId = f.autorizacaoId || null; item.produto = f.produto; item.data = f.data; item.status = f.status; item.titulo = f.titulo; item.link = f.link; item.rede = f.rede || null; item.obs = f.obs; item.mes = f.mes || mesChave(f.data); item.quantidade = f.quantidade ? +f.quantidade : (item.produto === "revista" ? 1 : null); item.formato = f.formato || null; item.imagem = f.imagem || null;
+    item.id = item.id || uid("ent"); item.marcaId = f.marcaId; item.autorizacaoId = f.autorizacaoId || null; item.produto = f.produto; item.data = f.data; item.status = f.status; item.titulo = f.titulo; guardarLinks(item, linksDoForm(f)); delete item._linhas; item.obs = f.obs; item.mes = f.mes || mesChave(f.data); item.quantidade = f.quantidade ? +f.quantidade : (item.produto === "revista" ? 1 : null); item.formato = f.formato || null; item.imagem = f.imagem || null;
     item.metricas = {}; Object.keys(f).forEach(function (k) { if (k.indexOf("m_") === 0 && f[k] !== "") item.metricas[k.slice(2)] = num(f[k]); });
     if (!item.marcaId) return toast("Escolha a marca.", true);
     var linkMudou = !d.item || (d.item.link || "") !== (item.link || "");
@@ -1605,6 +1620,8 @@ function aoClicar(ev) {
     case "nova-cobranca-marca": S.dialogo = { tipo: "cobranca-marca", marcaId: id, produto: el.getAttribute("data-produto") || "" }; return render();
     case "editar-entrega": return abrirEntrega(byId(S.d.entregas, id));
     case "apagar-entrega": return confirmar("Excluir entrega", "Excluir esta entrega? Ela deixa de contar na cota.", "Excluir", function () { apagar("entregas", id, "Entrega excluída."); });
+    case "add-link-entrega": { var it5 = lerFormParaItem(el.closest("form")); it5._linhas = (it5._linhas || []).concat([{ rede: "", url: "" }]); S.dialogo.item = it5; return render(); }
+    case "tirar-link-entrega": { var it6 = lerFormParaItem(el.closest("form")); it6._linhas.splice(+el.getAttribute("data-i"), 1); S.dialogo.item = it6; return render(); }
     case "tirar-imagem": S.dialogo.item = S.dialogo.item || {}; S.dialogo.item = Object.assign(lerFormParaItem(el.closest("form")), { imagem: "" }); return render();
     case "novo-fila": S.dialogo = { tipo: "fila", item: null }; return render();
     case "editar-fila": S.dialogo = { tipo: "fila", item: clone(byId(S.d.fila, id)) }; return render();
@@ -1628,7 +1645,7 @@ function aoClicar(ev) {
     case "confirmar-ok": { var fn = S.dialogo.fn; S.dialogo = null; return fn && fn(); }
   }
 }
-function lerFormParaItem(form) { var f = ler(form); var it = clone(S.dialogo.item || {}); Object.keys(f).forEach(function (k) { if (k.indexOf("m_") === 0) { it.metricas = it.metricas || {}; it.metricas[k.slice(2)] = f[k]; } else it[k] = f[k]; }); return it; }
+function lerFormParaItem(form) { var f = ler(form); var it = clone(S.dialogo.item || {}); if (form.querySelector('[name^="lk_url_"]')) it._linhas = linksDoForm(f); Object.keys(f).forEach(function (k) { if (k.indexOf("lk_") === 0) return; if (k.indexOf("m_") === 0) { it.metricas = it.metricas || {}; it.metricas[k.slice(2)] = f[k]; } else it[k] = f[k]; }); return it; }
 function guardarBrandDoForm(formEl, b, msg) {
   var f = ler(formEl);
   b.marcaId = f.marcaId; b.autorizacaoId = f.autorizacaoId || null; b.titulo = f.titulo; b.apresentador = f.apresentador; b.local = f.local; b.logistica = f.logistica; b.dataGravacao = f.dataGravacao || b.dataGravacao || null; b.dataVeiculacao = f.dataVeiculacao || b.dataVeiculacao || null; b.refacoes = +f.refacoes || 0; b.custo = num(f.custo); b.obs = f.obs;
