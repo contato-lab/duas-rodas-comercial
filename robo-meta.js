@@ -21,7 +21,7 @@ if (!TOKEN) { console.error("Falta o segredo META_TOKEN."); process.exit(1); }
 const PROJETO = process.env.GOOGLE_CLOUD_PROJECT || "comercial-duas-rodas-lime";
 const db = new Firestore({ projectId: PROJETO });
 const G = "https://graph.facebook.com/v21.0";
-const LEITURA = 3; // sobe quando a forma de ler muda, para o robô reler todos os posts uma vez
+const LEITURA = 4; // sobe quando a forma de ler muda, para o robô reler todos os posts uma vez
 const DIAS_REFRESCO = +process.env.DIAS_REFRESCO || 7; // post com menos de N dias é relido todo dia; depois, uma vez por semana
 
 async function graph(caminho, params) {
@@ -106,13 +106,13 @@ async function mapaFacebook(pagina) {
   return mapa;
 }
 function normalizarUrl(u) { try { const x = new URL(u); return (x.hostname.replace(/^(www|m|web)\./, "") + x.pathname).replace(/\/$/, "").toLowerCase(); } catch (e) { return String(u || "").toLowerCase(); } }
-let brutos = 0;
 async function insightsFacebook(post, pagina) {
   // O Meta trocou impressões por visualizações (post_media_view) e alcance por espectadores (post_total_media_view_unique).
   // Pede uma métrica por vez e fica com as que existem; as antigas ficam de reserva
   const ins = {};
   for (const m of ["post_total_media_view_unique", "post_media_view", "post_impressions_unique", "post_video_views"]) {
-    try { const j = await graph(`/${post.id}/insights`, { metric: m, access_token: pagina.access_token }); (j.data || []).forEach(d => { ins[d.name] = d.values && d.values[0] ? d.values[0].value : null; }); if (m === "post_total_media_view_unique" && !ins[m] && brutos++ < 3) console.log("resposta crua de espectadores:", JSON.stringify(j).slice(0, 400)); } catch (e) { console.warn("métrica indisponível", m, e.message.slice(0, 60)); }
+    // a resposta traz o total do post (lifetime) e o do dia: vale o total
+    try { const j = await graph(`/${post.id}/insights`, { metric: m, access_token: pagina.access_token }); const d = (j.data || []).find(x => x.period === "lifetime") || (j.data || [])[0]; if (d) ins[d.name] = d.values && d.values[0] ? d.values[0].value : null; } catch (e) { console.warn("métrica indisponível", m, e.message.slice(0, 60)); }
   }
   const det = await graph(`/${post.id}`, { fields: "shares,comments.summary(true).limit(0),reactions.summary(true).limit(0)", access_token: pagina.access_token });
   const vis = num(ins.post_media_view != null ? ins.post_media_view : (ins.post_video_views > 0 ? ins.post_video_views : null));
