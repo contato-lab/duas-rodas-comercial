@@ -137,7 +137,7 @@ function atualizarYoutubeBrands(lista, silencioso) {
   return buscarYoutube(ids).then(function (mapa) {
     var n = 0; var salvar = [];
     alvo.forEach(function (b) { var st = mapa[youtubeId(b.links.youtube)]; if (!st) return; var nb = clone(b); nb.youtube = { visualizacoes: st.visualizacoes, curtidas: st.curtidas, comentarios: st.comentarios, atualizadoEm: hoje, link: b.links.youtube }; salvar.push(nb); n++; });
-    return Promise.all(salvar.map(function (nb) { return API.salvar("brands", nb); })).then(function () { if (!silencioso) toast("Números do YouTube atualizados em " + n + (n === 1 ? " vídeo." : " vídeos.")); else if (n) toast("YouTube: " + n + (n === 1 ? " vídeo atualizado." : " vídeos atualizados.")); render(); return n; });
+    return Promise.all(salvar.map(function (nb) { return API.salvar("brands", nb); })).then(function () { if (!silencioso) toast("Números do YouTube atualizados em " + n + (n === 1 ? " vídeo." : " vídeos.")); else if (n) toast("YouTube: " + n + (n === 1 ? " vídeo atualizado." : " vídeos atualizados.")); renderFundo(); return n; });
   }).catch(function (e) { toast("Não deu para ler o YouTube: " + (e && e.message ? e.message : "erro de rede")); return 0; });
 }
 function htmlYoutubeBox(b, link, estado) {
@@ -333,6 +333,9 @@ function diasParado(b) { var d = diasEntre(b.atualizadoEm || hojeISO(), hojeISO(
 /* ============================================================ rotas e render */
 function rota() { var h = location.hash.replace(/^#/, "") || "/inicio"; var q = h.split("?"); var partes = q[0].split("/").filter(Boolean); return { caminho: "/" + (partes[0] || "inicio"), id: partes[1] || "", params: new URLSearchParams(q[1] || "") }; }
 function irPara(h) { location.hash = h; }
+// Atualização que chega sozinha (outra pessoa salvou, YouTube, robôs): com o formulário de entrega aberto, não redesenha,
+// para não apagar o que está sendo digitado. Ao salvar ou cancelar a tela é redesenhada com os dados novos
+function renderFundo() { if (S.dialogo && S.dialogo.tipo === "entrega" && document.querySelector('form[data-form="entrega"]')) return; render(); }
 function render() {
   var app = document.getElementById("app");
   var foco = document.activeElement && document.activeElement.id ? { id: document.activeElement.id, pos: document.activeElement.selectionStart } : null;
@@ -1070,6 +1073,27 @@ function cardDigitados(m, a, ents) {
   return '<div class="card"><div class="cab"><h2>Dados digitados: e-mail, banner e revista</h2></div><div class="corpo col"><span class="small muted">Estes três ainda não são lidos sozinhos. O que for lançado aqui entra no relatório e conta na cota da autorização. Clique numa linha para corrigir.</span><div class="grid g3 digitados">' +
     bloco("email", "E-mail marketing", "Adicionar disparo") + bloco("banner", "Banner no site", "Adicionar mês") + bloco("revista", "Páginas de revista", "Adicionar página") + "</div></div></div>";
 }
+// Tabela copiada do relatório de banner do site: linhas "dd/mm/aaaa  impressões  cliques". Soma o mês com mais dias
+function lerTabelaBanner(texto) {
+  var re = /(\d{2})\/(\d{2})\/(\d{4})\s+([\d.]+)\s+([\d.]+)/g, m, dias = {};
+  while ((m = re.exec(texto || ""))) dias[m[3] + "-" + m[2] + "-" + m[1]] = { imp: +m[4].replace(/\./g, ""), cli: +m[5].replace(/\./g, "") };
+  var porMes = {}; Object.keys(dias).forEach(function (d) { (porMes[d.slice(0, 7)] = porMes[d.slice(0, 7)] || []).push(d); });
+  var meses = Object.keys(porMes).sort(function (a, b) { return porMes[b].length - porMes[a].length || b.localeCompare(a); });
+  if (!meses.length) return null;
+  var mes = meses[0], r = { mes: mes, dias: porMes[mes].length, impressoes: 0, cliques: 0, ultimoDia: porMes[mes].slice().sort().pop(), foraDoMes: Object.keys(dias).length - porMes[mes].length };
+  Object.keys(dias).forEach(function (d) { if (d.slice(0, 7) === mes) { r.impressoes += dias[d].imp; r.cliques += dias[d].cli; } });
+  return r;
+}
+document.addEventListener("input", function (ev) {
+  var t = ev.target; if (!t || !t.hasAttribute || !t.hasAttribute("data-colar-banner")) return;
+  var form = t.closest("form"), msg = form.querySelector("[data-colar-banner-msg]"); if (!t.value.trim()) return;
+  var r = lerTabelaBanner(t.value);
+  if (!r) { msg.textContent = "Não achei linhas de data, impressões e cliques no que foi colado. Copie a tabela inteira do relatório."; msg.style.color = "var(--erro)"; return; }
+  form.m_impressoes.value = r.impressoes; form.m_cliques.value = r.cliques; form.mes.value = r.mes;
+  if (mesChave(form.data.value) !== r.mes) form.data.value = r.ultimoDia;
+  msg.style.color = "var(--ok)";
+  msg.textContent = "Lido: " + nomeMes(r.mes) + ", " + r.dias + (r.dias === 1 ? " dia" : " dias") + ", " + fmtNum(r.impressoes) + " impressões e " + fmtNum(r.cliques) + " cliques. Confira e salve." + (r.foraDoMes ? " " + r.foraDoMes + (r.foraDoMes === 1 ? " linha de outro mês ficou" : " linhas de outros meses ficaram") + " de fora." : "");
+});
 function escreverDestaquesIA(el) {
   var m = marca(S.relMarca); var a = S.relAut === "todas" ? "todas" : aut(S.relAut); if (!m || !a) return;
   var d = coletorRelatorio(m, a); var dqKey = m.id + "|" + (a === "todas" ? "todas" : a.id);
@@ -1285,7 +1309,7 @@ function formEntrega(d) {
   var metricas = "";
   if (e.produto === "post") metricas = (m.metaEm ? '<div class="alerta-box ok">' + icone("chart") + '<span class="t">Números lidos do ' + String(m.fonte || "instagram").split("+").map(function (r) { return REDES[r] || r; }).join(" e ") + " em " + fmtDataCurta(m.metaEm) + ". O robô atualiza sozinho; o que você digitar aqui vale até a próxima leitura." + porRedeTexto(e) + "</span></div>" : (m.metaAviso ? '<div class="alerta-box alerta">' + icone("info") + '<span class="t">' + esc(m.metaAviso) + "</span></div>" : "")) + '<div class="grid g3">' + campo("Visualizações", input("m_visualizacoes", m.visualizacoes, "number")) + campo("Alcance (contas)", input("m_alcance", m.alcance, "number")) + campo("Curtidas", input("m_curtidas", m.curtidas, "number")) + campo("Comentários", input("m_comentarios", m.comentarios, "number")) + campo("Compartilhamentos", input("m_compartilhamentos", m.compartilhamentos, "number")) + campo("Salvamentos", input("m_salvamentos", m.salvamentos, "number")) + "</div>";
   else if (e.produto === "email") metricas = '<div class="grid g3">' + campo("Base disparada", input("m_base", m.base, "number")) + campo("Aberturas", input("m_aberturas", m.aberturas, "number")) + campo("Cliques", input("m_cliques", m.cliques, "number")) + "</div>";
-  else if (e.produto === "banner") metricas = '<div class="grid g2">' + campo("Impressões no mês", input("m_impressoes", m.impressoes, "number", "required"), "Soma na cota de impressões") + campo("Cliques no mês (opcional)", input("m_cliques", m.cliques, "number")) + "</div>" + campo("Mês de referência", input("mes", e.mes || mesChave(e.data), "month"));
+  else if (e.produto === "banner") metricas = '<div class="campo"><label>Colar tabela do site (opcional)</label><textarea class="textarea" rows="3" data-colar-banner placeholder="No relatório do site, selecione a tabela de Data, Impressões e Cliques, copie e cole aqui."></textarea><span class="ajuda" data-colar-banner-msg>A plataforma soma o mês e preenche impressões, cliques e mês de referência.</span></div><div class="grid g2">' + campo("Impressões no mês", input("m_impressoes", m.impressoes, "number", "required"), "Soma na cota de impressões") + campo("Cliques no mês (opcional)", input("m_cliques", m.cliques, "number")) + "</div>" + campo("Mês de referência", input("mes", e.mes || mesChave(e.data), "month"));
   else if (e.produto === "revista") metricas = '<div class="grid g3">' + campo("Edição / mês", input("mes", e.mes || mesChave(e.data), "month")) + campo("Quantidade de páginas", input("quantidade", e.quantidade || 1, "number", 'min="1"'), "Soma na cota") + campo("Formato", select("formato", [["simples", "Simples"], ["dupla", "Dupla"], ["capa", "Capa / contracapa"]], e.formato || "simples")) + "</div>" + campo("Números da edição (opcional)", input("resultado", e.resultado, "text", 'placeholder="Ex.: tiragem, circulação, leitores"'), "Texto livre com o que a revista informar. Entra no relatório abaixo da página.");
   else if (e.produto === "brand") metricas = '<div class="alerta-box info">' + icone("info") + '<span class="t">Vídeos de brand contam pela linha do tempo (etapa Veiculado), não por aqui. Use esta entrega só para registrar o resultado do vídeo no relatório.</span></div><div class="grid g2">' + campo("Visualizações", input("m_visualizacoes", m.visualizacoes, "number")) + campo("Curtidas", input("m_curtidas", m.curtidas, "number")) + "</div>";
   return '<form class="dialogo" data-form="entrega">' + cabDialogo(e.id ? "Editar entrega" : "Registrar entrega", "O que saiu (ou vai sair) para a marca. Publicado conta na cota; programado aparece no calendário.") + '<div class="corpo">' +
@@ -1866,7 +1890,7 @@ API.carregar().then(function (d) {
   return d;
 }).then(function (d) {
   S.d = d; S.pronto = true;
-  if (API.onChange) API.onChange(function () { S.d = API.exportar(); render(); });
+  if (API.onChange) API.onChange(function () { S.d = API.exportar(); renderFundo(); });
   render();
   // YouTube: uma vez por dia, quem abrir primeiro atualiza os vídeos que ainda não foram lidos hoje
   if (temYoutube()) setTimeout(function () { var hj = hojeISO(); var pend = S.d.brands.filter(function (b) { return youtubeId(b.links && b.links.youtube) && !(b.youtube && b.youtube.atualizadoEm === hj); }); if (pend.length) atualizarYoutubeBrands(pend, true); }, 2500);
