@@ -137,13 +137,18 @@ async function acharNoFacebook(graph, pagina, link, dataEntrega, titulo) {
   return peloTitulo;
 }
 async function insightsFacebook(graph, post, pagina) {
-  // O Meta vem aposentando métricas de post; pede uma por vez e fica com as que ainda existem
+  // O Meta trocou impressões por visualizações (post_media_view) e alcance por espectadores (post_total_media_view_unique).
+  // Pede uma métrica por vez e fica com as que existem; as antigas ficam de reserva
   const ins = {};
-  for (const m of ["post_impressions_unique", "post_impressions", "post_media_views", "post_video_views"]) {
-    try { const j = await graph(`/${post.id}/insights`, { metric: m, access_token: pagina.access_token }); (j.data || []).forEach(d => { ins[d.name] = d.values && d.values[0] ? d.values[0].value : null; }); } catch (e) { console.warn("métrica indisponível", m, e.message.slice(0, 60)); }
+  for (const m of ["post_total_media_view_unique", "post_media_view", "post_impressions_unique", "post_video_views"]) {
+    // a resposta traz o total do post (lifetime) e o do dia: vale o total
+    try { const j = await graph(`/${post.id}/insights`, { metric: m, access_token: pagina.access_token }); const d = (j.data || []).find(x => x.period === "lifetime") || (j.data || [])[0]; if (d) ins[d.name] = d.values && d.values[0] ? d.values[0].value : null; } catch (e) { console.warn("métrica indisponível", m, e.message.slice(0, 60)); }
   }
   const det = await graph(`/${post.id}`, { fields: "shares,comments.summary(true).limit(0),reactions.summary(true).limit(0)", access_token: pagina.access_token });
-  return { alcance: num(ins.post_impressions_unique != null ? ins.post_impressions_unique : ins.post_impressions), visualizacoes: num(ins.post_video_views != null ? ins.post_video_views : ins.post_media_views), curtidas: num(det.reactions && det.reactions.summary && det.reactions.summary.total_count), comentarios: num(det.comments && det.comments.summary && det.comments.summary.total_count), compartilhamentos: num(det.shares && det.shares.count) };
+  const vis = num(ins.post_media_view != null ? ins.post_media_view : (ins.post_video_views > 0 ? ins.post_video_views : null));
+  let alc = num(ins.post_total_media_view_unique || ins.post_impressions_unique || null);
+  if (!alc) alc = vis ? null : (ins.post_total_media_view_unique === 0 ? 0 : null); // o Meta devolve 0 espectadores em post que teve visualização: não é dado, fica de fora
+  return { alcance: alc, visualizacoes: vis, curtidas: num(det.reactions && det.reactions.summary && det.reactions.summary.total_count), comentarios: num(det.comments && det.comments.summary && det.comments.summary.total_count), compartilhamentos: num(det.shares && det.shares.count) };
 }
 
 // Lê o post da entrega e devolve o que mudar nela: { metricas, imagem?, legendaPost? } ou { aviso }
