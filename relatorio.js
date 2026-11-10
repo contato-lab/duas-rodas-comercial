@@ -93,14 +93,15 @@ function slideEmail(d, lista) {
   return { descricao: "E-mail marketing: " + lista.length + " disparo" + (lista.length > 1 ? "s" : ""), html: '<section class="slide item">' + faixaTitulo(d.marca.nome, "E-MAIL", "MARKETING") + '<div class="caixas">' + linhas.map(function (l) { return '<div class="cx"><span class="rot">' + esc(l[0]) + "</span><div>" + esc(l[1].toUpperCase()) + "</div></div>"; }).join("") + "</div></section>" };
 }
 function slideBanner(d, lista) {
-  var porMes = {}; lista.forEach(function (e) { var k = e.mes || (e.data || "").slice(0, 7); porMes[k] = (porMes[k] || 0) + (+(e.metricas && e.metricas.impressoes) || 0); });
-  var total = 0; Object.keys(porMes).forEach(function (k) { total += porMes[k]; });
-  var cx = Object.keys(porMes).sort().map(function (k) { return '<div class="cx"><span class="rot">' + esc(mesDe(k + "-01")) + "</span><div>" + fmtNum(porMes[k]) + " IMPRESSÕES</div></div>"; });
-  return { descricao: "Banner no site: " + fmtNum(total) + " impressões", html: '<section class="slide item">' + faixaTitulo(d.marca.nome, "BANNER", "NO SITE") + '<div class="caixas' + (cx.length > 6 ? " muitas" : (cx.length === 4 ? " quatro" : "")) + '">' + cx.join("") + '</div><div class="legenda">TOTAL: ' + fmtNum(total) + " IMPRESSÕES" + (d.consumo.banner && d.consumo.banner.contratado ? " DE " + fmtNum(d.consumo.banner.contratado) + " CONTRATADAS" : "") + "</div></section>" };
+  var porMes = {}, cliquesMes = {}; lista.forEach(function (e) { var k = e.mes || (e.data || "").slice(0, 7); porMes[k] = (porMes[k] || 0) + (+(e.metricas && e.metricas.impressoes) || 0); if (e.metricas && e.metricas.cliques != null) cliquesMes[k] = (cliquesMes[k] || 0) + (+e.metricas.cliques || 0); });
+  var total = 0, cliques = 0; Object.keys(porMes).forEach(function (k) { total += porMes[k]; }); Object.keys(cliquesMes).forEach(function (k) { cliques += cliquesMes[k]; });
+  var temCliques = Object.keys(cliquesMes).length > 0;
+  var cx = Object.keys(porMes).sort().map(function (k) { return '<div class="cx"><span class="rot">' + esc(mesDe(k + "-01")) + "</span><div>" + fmtNum(porMes[k]) + " IMPRESSÕES" + (cliquesMes[k] != null ? "<br>" + qtd(cliquesMes[k], "CLIQUE", "CLIQUES") : "") + "</div></div>"; });
+  return { descricao: "Banner no site: " + fmtNum(total) + " impressões" + (temCliques ? " e " + fmtNum(cliques) + " cliques" : ""), html: '<section class="slide item">' + faixaTitulo(d.marca.nome, "BANNER", "NO SITE") + '<div class="caixas' + (cx.length > 6 ? " muitas" : (cx.length === 4 ? " quatro" : "")) + '">' + cx.join("") + '</div><div class="legenda">TOTAL: ' + fmtNum(total) + " IMPRESSÕES" + (d.consumo.banner && d.consumo.banner.contratado ? " DE " + fmtNum(d.consumo.banner.contratado) + " CONTRATADAS" : "") + (temCliques ? " · " + qtd(cliques, "CLIQUE", "CLIQUES") : "") + "</div></section>" };
 }
 function slideRevista(d, lista) {
-  var porMes = {}; lista.forEach(function (e) { var k = e.mes || (e.data || "").slice(0, 7); (porMes[k] = porMes[k] || []).push((e.titulo || d.marca.nome.split("/")[0]) + " - " + (e.formato || "simples").toUpperCase()); });
-  var cx = Object.keys(porMes).sort().map(function (k) { return '<div class="cx"><span class="rot">' + esc(mesDe(k + "-01")) + "</span><div>" + porMes[k].map(function (t) { return esc(t.toUpperCase()); }).join("<br>") + "</div></div>"; });
+  var porMes = {}; lista.forEach(function (e) { var k = e.mes || (e.data || "").slice(0, 7); (porMes[k] = porMes[k] || []).push((e.titulo || d.marca.nome.split("/")[0]) + " - " + (e.formato || "simples").toUpperCase() + (e.resultado ? "\n" + e.resultado : "")); });
+  var cx = Object.keys(porMes).sort().map(function (k) { return '<div class="cx"><span class="rot">' + esc(mesDe(k + "-01")) + "</span><div>" + porMes[k].map(function (t) { return esc(t.toUpperCase()).replace(/\n/g, "<br>"); }).join("<br>") + "</div></div>"; });
   return { descricao: "Páginas de revista: " + lista.length + " lançamento" + (lista.length > 1 ? "s" : "") + " em " + Object.keys(porMes).length + " edições", html: '<section class="slide item"><div class="lateral"></div>' + faixaTitulo(d.marca.nome, "PÁGINAS DE", "REVISTA") + '<div class="caixas quatro">' + cx.join("") + "</div></section>" };
 }
 function slideObrigado() {

@@ -493,3 +493,10 @@ html[data-tema="escuro"] .ano-cel.cheia.post{background:#1E3A8A;color:#BFDBFE}ht
 .links-entrega{display:flex;flex-direction:column;gap:8px}
 .link-linha{display:grid;grid-template-columns:170px 1fr auto;gap:8px;align-items:center}
 @media (max-width:600px){.link-linha{grid-template-columns:120px 1fr auto}}
+
+.digitados{align-items:start}
+.digitado{display:flex;flex-direction:column;gap:6px;border:1px solid var(--borda);border-radius:10px;padding:12px}
+.digitado h3{font-size:13px;margin:0}
+.digitado-linha{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;text-align:left;width:100%;background:var(--muted-bg);border:0;border-radius:8px;padding:8px 10px;font:inherit;font-size:12.5px;color:var(--fg);cursor:pointer}
+.digitado-linha:hover{outline:1px solid var(--borda)}
+.digitado-linha .ic{width:14px;height:14px;opacity:.6}
