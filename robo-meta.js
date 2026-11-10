@@ -21,6 +21,7 @@ if (!TOKEN) { console.error("Falta o segredo META_TOKEN."); process.exit(1); }
 const PROJETO = process.env.GOOGLE_CLOUD_PROJECT || "comercial-duas-rodas-lime";
 const db = new Firestore({ projectId: PROJETO });
 const G = "https://graph.facebook.com/v21.0";
+const LEITURA = 2; // sobe quando a forma de ler muda, para o robô reler todos os posts uma vez
 const DIAS_REFRESCO = +process.env.DIAS_REFRESCO || 7; // post com menos de N dias é relido todo dia; depois, uma vez por semana
 
 async function graph(caminho, params) {
@@ -106,13 +107,14 @@ async function mapaFacebook(pagina) {
 }
 function normalizarUrl(u) { try { const x = new URL(u); return (x.hostname.replace(/^(www|m|web)\./, "") + x.pathname).replace(/\/$/, "").toLowerCase(); } catch (e) { return String(u || "").toLowerCase(); } }
 async function insightsFacebook(post, pagina) {
-  // O Meta vem aposentando métricas de post; pede uma por vez e fica com as que ainda existem
+  // O Meta trocou impressões por visualizações (post_media_view) e alcance por espectadores (post_total_media_view_unique).
+  // Pede uma métrica por vez e fica com as que existem; as antigas ficam de reserva
   const ins = {};
-  for (const m of ["post_impressions_unique", "post_impressions", "post_media_views", "post_video_views"]) {
+  for (const m of ["post_total_media_view_unique", "post_media_view", "post_impressions_unique", "post_video_views"]) {
     try { const j = await graph(`/${post.id}/insights`, { metric: m, access_token: pagina.access_token }); (j.data || []).forEach(d => { ins[d.name] = d.values && d.values[0] ? d.values[0].value : null; }); } catch (e) { console.warn("métrica indisponível", m, e.message.slice(0, 60)); }
   }
   const det = await graph(`/${post.id}`, { fields: "shares,comments.summary(true).limit(0),reactions.summary(true).limit(0)", access_token: pagina.access_token });
-  return { alcance: num(ins.post_impressions_unique != null ? ins.post_impressions_unique : ins.post_impressions), visualizacoes: num(ins.post_video_views != null ? ins.post_video_views : ins.post_media_views), curtidas: num(det.reactions && det.reactions.summary && det.reactions.summary.total_count), comentarios: num(det.comments && det.comments.summary && det.comments.summary.total_count), compartilhamentos: num(det.shares && det.shares.count) };
+  return { alcance: num(ins.post_total_media_view_unique != null ? ins.post_total_media_view_unique : ins.post_impressions_unique), visualizacoes: num(ins.post_media_view != null ? ins.post_media_view : (ins.post_video_views > 0 ? ins.post_video_views : null)), curtidas: num(det.reactions && det.reactions.summary && det.reactions.summary.total_count), comentarios: num(det.comments && det.comments.summary && det.comments.summary.total_count), compartilhamentos: num(det.shares && det.shares.count) };
 }
 function num(v) { return v == null || isNaN(+v) ? null : +v; }
 
@@ -150,7 +152,7 @@ async function main() {
 
   const snap = await db.collection("entregas").get();
   const alvo = snap.docs.map(d => ({ ref: d.ref, ...d.data() })).filter(e => e.produto === "post" && linksMeta(e).length);
-  const pendentes = alvo.filter(e => { const m = e.metricas || {}; if (!m.metaEm || !e.imagem || !e.legendaPost) return true; if ((e.metricasPorLink || []).length !== linksMeta(e).length) return true; const idade = e.data ? diasEntre(e.data, hoje) : 999; const desde = diasEntre(m.metaEm, hoje); return idade <= DIAS_REFRESCO ? desde >= 1 : desde >= 7; });
+  const pendentes = alvo.filter(e => { const m = e.metricas || {}; if (!m.metaEm || !e.imagem || !e.legendaPost || (m.leitura || 1) < LEITURA) return true; if ((e.metricasPorLink || []).length !== linksMeta(e).length) return true; const idade = e.data ? diasEntre(e.data, hoje) : 999; const desde = diasEntre(m.metaEm, hoje); return idade <= DIAS_REFRESCO ? desde >= 1 : desde >= 7; });
   console.log(`${alvo.length} posts com link do Instagram ou Facebook, ${pendentes.length} para atualizar.`);
   if (!pendentes.length) { await estadoRef.set({ ultimaRodada: inicio.toISOString(), pagina: pagina.name, instagram: ig ? ig.username : null, posts: alvo.length, atualizados: 0, naoAchados: 0, erro: null }, { merge: true }); return; }
 
@@ -175,7 +177,8 @@ async function main() {
       if (!porLink.length) { naoAchados++; faltando.push(e.titulo || e.link); await e.ref.update({ "metricas.metaAviso": "Post não encontrado na conta da revista. Confira o link." }); continue; }
       const metricas = Object.assign({}, e.metricas || {});
       CAMPOS.forEach(k => { const v = porLink.map(p => p[k]).filter(x => x != null); if (v.length) metricas[k] = v.reduce((a, b) => a + b, 0); });
-      metricas.metaEm = hoje; metricas.fonte = [...new Set(porLink.map(p => p.rede))].join("+"); delete metricas.metaAviso;
+      CAMPOS.forEach(k => { if (!porLink.some(p => p[k] != null) && metricas[k] === 0) delete metricas[k]; }); // zero que ninguém mediu não é dado
+      metricas.leitura = LEITURA; metricas.metaEm = hoje; metricas.fonte = [...new Set(porLink.map(p => p.rede))].join("+"); delete metricas.metaAviso;
       if (porLink.length < linksMeta(e).length) metricas.metaAviso = "Um dos links não foi encontrado na conta da revista. O total soma só os que foram achados.";
       const mudar = { metricas, metricasPorLink: porLink };
       const titulo = tituloDaLegenda(legenda); if (titulo && titulo !== e.legendaPost) mudar.legendaPost = titulo;
