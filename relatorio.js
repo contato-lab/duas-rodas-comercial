@@ -93,10 +93,10 @@ function slideEmail(d, lista) {
   return { descricao: "E-mail marketing: " + lista.length + " disparo" + (lista.length > 1 ? "s" : ""), html: '<section class="slide item">' + faixaTitulo(d.marca.nome, "E-MAIL", "MARKETING") + '<div class="caixas">' + linhas.map(function (l) { return '<div class="cx"><span class="rot">' + esc(l[0]) + "</span><div>" + esc(l[1].toUpperCase()) + "</div></div>"; }).join("") + "</div></section>" };
 }
 function slideBanner(d, lista) {
-  var porMes = {}, cliquesMes = {}; lista.forEach(function (e) { var k = e.mes || (e.data || "").slice(0, 7); porMes[k] = (porMes[k] || 0) + (+(e.metricas && e.metricas.impressoes) || 0); if (e.metricas && e.metricas.cliques != null) cliquesMes[k] = (cliquesMes[k] || 0) + (+e.metricas.cliques || 0); });
+  var porMes = {}, cliquesMes = {}, temNumero = {}; lista.forEach(function (e) { var k = e.mes || (e.data || "").slice(0, 7); porMes[k] = (porMes[k] || 0) + (+(e.metricas && e.metricas.impressoes) || 0); if (e.metricas && e.metricas.impressoes != null) temNumero[k] = true; if (e.metricas && e.metricas.cliques != null) cliquesMes[k] = (cliquesMes[k] || 0) + (+e.metricas.cliques || 0); });
   var total = 0, cliques = 0; Object.keys(porMes).forEach(function (k) { total += porMes[k]; }); Object.keys(cliquesMes).forEach(function (k) { cliques += cliquesMes[k]; });
   var temCliques = Object.keys(cliquesMes).length > 0;
-  var cx = Object.keys(porMes).sort().map(function (k) { return '<div class="cx"><span class="rot">' + esc(mesDe(k + "-01")) + "</span><div>" + fmtNum(porMes[k]) + " IMPRESSÕES" + (cliquesMes[k] != null ? "<br>" + qtd(cliquesMes[k], "CLIQUE", "CLIQUES") : "") + "</div></div>"; });
+  var cx = Object.keys(porMes).sort().map(function (k) { return '<div class="cx"><span class="rot">' + esc(mesDe(k + "-01")) + "</span><div>" + (temNumero[k] ? fmtNum(porMes[k]) + " IMPRESSÕES" : "NO AR, NÚMEROS NO FECHAMENTO DO MÊS") + (cliquesMes[k] != null ? "<br>" + qtd(cliquesMes[k], "CLIQUE", "CLIQUES") : "") + "</div></div>"; });
   return { descricao: "Banner no site: " + fmtNum(total) + " impressões" + (temCliques ? " e " + fmtNum(cliques) + " cliques" : ""), html: '<section class="slide item">' + faixaTitulo(d.marca.nome, "BANNER", "NO SITE") + '<div class="caixas' + (cx.length > 6 ? " muitas" : (cx.length === 4 ? " quatro" : "")) + '">' + cx.join("") + '</div><div class="legenda">TOTAL: ' + fmtNum(total) + " IMPRESSÕES" + (d.consumo.banner && d.consumo.banner.contratado ? " DE " + fmtNum(d.consumo.banner.contratado) + " CONTRATADAS" : "") + (temCliques ? " · " + qtd(cliques, "CLIQUE", "CLIQUES") : "") + "</div></section>" };
 }
 function slideRevista(d, lista) {
@@ -116,7 +116,7 @@ function slideEmailPrint(d, e) {
 }
 function slideBannerPrint(d, e, legenda) {
   var m = e.metricas || {}; var mes = mesDe((e.mes || (e.data || "").slice(0, 7)) + "-01");
-  return slideComPrint(d, "BANNER", "NO SITE", e, mes, [m.impressoes != null ? fmtNum(m.impressoes) + " IMPRESSÕES" : "", m.cliques != null ? qtd(m.cliques, "CLIQUE", "CLIQUES") : ""], legenda || e.titulo, "Banner no site, " + mes.toLowerCase() + " (com print)");
+  return slideComPrint(d, "BANNER", "NO SITE", e, mes, [m.impressoes != null ? fmtNum(m.impressoes) + " IMPRESSÕES" : "", m.cliques != null ? qtd(m.cliques, "CLIQUE", "CLIQUES") : "", m.impressoes == null && m.cliques == null ? "NO AR DESDE " + fmtData(e.data) : ""], legenda || e.titulo, "Banner no site, " + mes.toLowerCase() + " (com print)");
 }
 function slideRevistaPrint(d, e) {
   var mes = mesDe((e.mes || (e.data || "").slice(0, 7)) + "-01"); var q = +(e.quantidade || 1);
@@ -139,7 +139,7 @@ function montarDados(d) {
   if (emails.length && !(emails.length === 1 && emails[0].imagem)) slides.push(slideEmail(d, emails));
   emails.forEach(function (e) { if (e.imagem) slides.push(slideEmailPrint(d, e)); });
   var banners = d.entregas.filter(function (e) { return e.produto === "banner"; });
-  if (banners.length === 1 && banners[0].imagem) { var cb = d.consumo.banner; slides.push(slideBannerPrint(d, banners[0], cb && cb.contratado ? "Total: " + fmtNum(+(banners[0].metricas || {}).impressoes || 0) + " impressões de " + fmtNum(cb.contratado) + " contratadas" : "")); }
+  if (banners.length === 1 && banners[0].imagem) { var cb = d.consumo.banner; slides.push(slideBannerPrint(d, banners[0], cb && cb.contratado && (banners[0].metricas || {}).impressoes != null ? "Total: " + fmtNum(+(banners[0].metricas || {}).impressoes || 0) + " impressões de " + fmtNum(cb.contratado) + " contratadas" : "")); }
   else if (banners.length) { slides.push(slideBanner(d, banners)); banners.forEach(function (e) { if (e.imagem) slides.push(slideBannerPrint(d, e)); }); }
   var revista = d.entregas.filter(function (e) { return e.produto === "revista"; });
   if (revista.length) {
