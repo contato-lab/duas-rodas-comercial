@@ -104,6 +104,24 @@ function slideRevista(d, lista) {
   var cx = Object.keys(porMes).sort().map(function (k) { return '<div class="cx"><span class="rot">' + esc(mesDe(k + "-01")) + "</span><div>" + porMes[k].map(function (t) { return esc(t.toUpperCase()).replace(/\n/g, "<br>"); }).join("<br>") + "</div></div>"; });
   return { descricao: "Páginas de revista: " + lista.length + " lançamento" + (lista.length > 1 ? "s" : "") + " em " + Object.keys(porMes).length + " edições", html: '<section class="slide item"><div class="lateral"></div>' + faixaTitulo(d.marca.nome, "PÁGINAS DE", "REVISTA") + '<div class="caixas quatro">' + cx.join("") + "</div></section>" };
 }
+// E-mail, banner e revista com print lançado: uma tela por lançamento, print à esquerda e números à direita
+function slideComPrint(d, a, b, e, rotulo, linhas, legenda, descricao, data) {
+  return { descricao: descricao, html: '<section class="slide item">' + faixaTitulo(d.marca.nome, a, b, data) +
+    '<div class="corpo"><div class="print justo"><img src="' + esc(e.imagem) + '" alt=""></div><div class="metricas">' + caixaMetrica(rotulo, linhas.filter(Boolean)) + "</div></div>" +
+    (legenda ? '<div class="legenda">' + esc(String(legenda).toUpperCase()) + "</div>" : "") + "</section>" };
+}
+function slideEmailPrint(d, e) {
+  var m = e.metricas || {};
+  return slideComPrint(d, "E-MAIL", "MARKETING", e, "RESULTADO", [m.base != null ? "BASE " + fmtNum(m.base) : "", m.aberturas != null ? qtd(m.aberturas, "ABERTURA", "ABERTURAS") : "", m.cliques != null ? qtd(m.cliques, "CLIQUE", "CLIQUES") : "", m.base == null && m.aberturas == null && m.cliques == null ? "DISPARADO EM " + fmtData(e.data) : ""], e.titulo, "E-mail " + fmtData(e.data) + ": " + (e.titulo || "disparo") + " (com print)", e.data);
+}
+function slideBannerPrint(d, e, legenda) {
+  var m = e.metricas || {}; var mes = mesDe((e.mes || (e.data || "").slice(0, 7)) + "-01");
+  return slideComPrint(d, "BANNER", "NO SITE", e, mes, [m.impressoes != null ? fmtNum(m.impressoes) + " IMPRESSÕES" : "", m.cliques != null ? qtd(m.cliques, "CLIQUE", "CLIQUES") : ""], legenda || e.titulo, "Banner no site, " + mes.toLowerCase() + " (com print)");
+}
+function slideRevistaPrint(d, e) {
+  var mes = mesDe((e.mes || (e.data || "").slice(0, 7)) + "-01"); var q = +(e.quantidade || 1);
+  return slideComPrint(d, "PÁGINAS DE", "REVISTA", e, mes, [qtd(q, "PÁGINA", "PÁGINAS"), "FORMATO " + (e.formato || "simples").toUpperCase(), e.resultado ? String(e.resultado).toUpperCase() : ""], e.titulo, "Página de revista, " + mes.toLowerCase() + " (com print)");
+}
 function slideObrigado() {
   return { descricao: "Obrigado e redes da Duas Rodas", html: '<section class="slide capa fim">' + fundoLetras() + '<div class="caixa"><h1>OBRIGADO!</h1><hr><div class="redes"><span><i class="ig"></i>@duasrodasbr</span><span><i class="yt"></i>@duasrodasbr</span><span><i class="fb"></i>@duasrodasbr</span><span><i class="tk"></i>@revistaduasrodas</span></div><hr><img class="logo" src="' + LOGO + '" alt="Duas Rodas"></div></section>' };
 }
@@ -116,9 +134,19 @@ function montarDados(d) {
   var posts = d.entregas.filter(function (e) { return e.produto === "post"; });
   if (posts.length) { slides.push(slideSecao(d, "POSTS", "PUBLICIDADE")); posts.forEach(function (e) { slides.push(slidePost(d, e)); }); }
   if (d.brands.length) { slides.push(slideSecao(d, "BRANDED", "")); d.brands.forEach(function (b) { slides.push(slideBrand(d, b)); }); }
-  var emails = d.entregas.filter(function (e) { return e.produto === "email"; }); if (emails.length) slides.push(slideEmail(d, emails));
-  var banners = d.entregas.filter(function (e) { return e.produto === "banner"; }); if (banners.length) slides.push(slideBanner(d, banners));
-  var revista = d.entregas.filter(function (e) { return e.produto === "revista"; }); if (revista.length) { slides.push(slideSecao(d, "PÁGINA", "DE REVISTA")); slides.push(slideRevista(d, revista)); }
+  // quem tem print ganha uma tela própria; a tela-resumo só sai quando há mais de um lançamento
+  var emails = d.entregas.filter(function (e) { return e.produto === "email"; });
+  if (emails.length && !(emails.length === 1 && emails[0].imagem)) slides.push(slideEmail(d, emails));
+  emails.forEach(function (e) { if (e.imagem) slides.push(slideEmailPrint(d, e)); });
+  var banners = d.entregas.filter(function (e) { return e.produto === "banner"; });
+  if (banners.length === 1 && banners[0].imagem) { var cb = d.consumo.banner; slides.push(slideBannerPrint(d, banners[0], cb && cb.contratado ? "Total: " + fmtNum(+(banners[0].metricas || {}).impressoes || 0) + " impressões de " + fmtNum(cb.contratado) + " contratadas" : "")); }
+  else if (banners.length) { slides.push(slideBanner(d, banners)); banners.forEach(function (e) { if (e.imagem) slides.push(slideBannerPrint(d, e)); }); }
+  var revista = d.entregas.filter(function (e) { return e.produto === "revista"; });
+  if (revista.length) {
+    slides.push(slideSecao(d, "PÁGINA", "DE REVISTA"));
+    if (!(revista.length === 1 && revista[0].imagem)) slides.push(slideRevista(d, revista));
+    revista.forEach(function (e) { if (e.imagem) slides.push(slideRevistaPrint(d, e)); });
+  }
   slides.push(slideObrigado());
   return { slides: slides };
 }
@@ -133,7 +161,7 @@ var CSS = '@import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&fami
   ".data{position:absolute;right:196px;top:0;width:198px;height:146px;background:" + VERMELHO + ";display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',Impact,sans-serif;font-size:40px}" +
   ".item .corpo{position:absolute;left:70px;right:80px;top:340px;bottom:190px;display:flex;gap:60px;align-items:flex-start}" +
   ".print{position:relative;flex:none;width:760px;max-height:520px;background:#111;box-shadow:-18px -18px 0 " + VERMELHO + "}.print img{display:block;width:100%;height:auto;max-height:520px;object-fit:contain;background:#111}" +
-  ".print.vazio{height:450px;display:flex;align-items:center;justify-content:center;color:#666;font-family:'Bebas Neue',Impact,sans-serif;font-size:40px;border:2px dashed #333}" +
+  ".print.justo{width:auto;max-width:760px}.print.justo img{width:auto;max-width:760px;max-height:540px}.print.vazio{height:450px;display:flex;align-items:center;justify-content:center;color:#666;font-family:'Bebas Neue',Impact,sans-serif;font-size:40px;border:2px dashed #333}" +
   ".metricas{display:flex;flex-direction:row;flex-wrap:wrap;gap:40px 36px;padding-top:70px;align-items:flex-start}" +
   ".metrica{border:3px solid #fff;padding:34px 28px 22px;min-width:360px;position:relative;margin-top:20px}.metrica .rotulo{position:absolute;left:-3px;top:-34px;background:" + VERMELHO + ";padding:6px 30px 6px 14px;font-weight:800;font-size:28px;text-transform:uppercase}.metrica div{display:flex;flex-direction:column;gap:4px;font-family:'Bebas Neue',Impact,sans-serif;font-size:36px;line-height:1.15}" +
   ".legenda{position:absolute;left:0;right:0;bottom:92px;color:#fff;display:block;text-align:center;font-family:'Bebas Neue',Impact,sans-serif;font-size:36px;text-decoration:underline;text-underline-offset:6px;padding:0 200px}.ver-posts{position:absolute;left:0;right:0;bottom:30px;display:flex;justify-content:center;gap:16px}.ver-post{background:" + VERMELHO + ";color:#fff;text-decoration:none;font-family:'Bebas Neue',Impact,sans-serif;font-size:26px;letter-spacing:1px;padding:6px 22px 4px}" +
