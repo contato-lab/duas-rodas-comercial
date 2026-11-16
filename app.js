@@ -350,7 +350,7 @@ function render() {
     case "/fila": titulo = "Fila de materiais"; sub = "O que chegou da marca, o que falta nele e em que dia vai sair"; conteudo = telaFila(); acao = botao("Entrou material", "prim", 'data-acao="novo-fila"', "plus"); break;
     case "/brand": titulo = "Brand"; sub = "Produção dos vídeos: quem está com a bola, há quanto tempo e o que fazer agora"; conteudo = telaBrand(); acao = botao("Novo brand", "prim", 'data-acao="novo-brand"', "plus"); break;
     case "/edicao": titulo = "Edição"; sub = "O que o New edita agora, o que voltou com ajuste e o que espera resposta"; conteudo = telaEdicao(); acao = botao("Novo material", "prim", 'data-acao="novo-edicao"', "plus"); break;
-    case "/calendario": titulo = "Calendário"; sub = "Tudo que vai sair, por dia"; conteudo = telaCalendario(); break;
+    case "/calendario": titulo = "Calendário"; sub = "Tudo que saiu e vai sair, por dia · clique num dia para registrar uma entrega nele"; conteudo = telaCalendario(); acao = botao("Registrar entrega", "prim", 'data-acao="nova-entrega"', "plus"); break;
     case "/relatorios": titulo = "Relatórios"; sub = "Relatório por cliente na identidade da revista"; conteudo = telaRelatorios(); break;
     case "/ajustes": titulo = "Ajustes"; sub = "Dados, tema e integrações"; conteudo = telaAjustes(); break;
     default: titulo = "Página não encontrada"; conteudo = '<div class="vazio">Essa tela não existe. <a href="#/inicio">Voltar ao início</a>.</div>';
@@ -1012,7 +1012,7 @@ function telaCalendario() {
   for (var i = 0; i < 42; i++) {
     var d = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate() + i); var iso = d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
     var fora = d.getMonth() !== mes; var lista = porDia[iso] || [];
-    dias += '<div class="dia' + (fora ? " fora" : "") + (iso === hoje ? " hoje" : "") + '"><span class="n">' + d.getDate() + "</span>" + lista.slice(0, 4).map(function (e) { return '<div class="evento ' + e.produto + (e.tipo === "fila" ? " fila" : "") + '" data-acao="abrir-evento" data-tipo="' + e.tipo + '" data-id="' + attr(e.id) + '" title="' + attr(e.marca + ": " + e.titulo) + '">' + esc(e.marca) + " · " + esc(e.titulo) + "</div>"; }).join("") + (lista.length > 4 ? '<div class="small muted">+' + (lista.length - 4) + "</div>" : "") + "</div>";
+    dias += '<div class="dia' + (fora ? " fora" : "") + (iso === hoje ? " hoje" : "") + '" data-acao="cal-dia" data-dia="' + iso + '" title="Clique para registrar uma entrega em ' + fmtData(iso) + '"><span class="n">' + d.getDate() + '</span><span class="mais" aria-hidden="true">+</span>' + lista.slice(0, 4).map(function (e) { return '<div class="evento ' + e.produto + (e.tipo === "fila" ? " fila" : "") + '" data-acao="abrir-evento" data-tipo="' + e.tipo + '" data-id="' + attr(e.id) + '" title="' + attr(e.marca + ": " + e.titulo) + '">' + esc(e.marca) + " · " + esc(e.titulo) + "</div>"; }).join("") + (lista.length > 4 ? '<div class="small muted">+' + (lista.length - 4) + "</div>" : "") + "</div>";
     if (i >= 34 && new Date(ini.getFullYear(), ini.getMonth(), ini.getDate() + i + 1).getMonth() !== mes && i % 7 === 6) break;
   }
   var ant = new Date(ano, mes - 1, 1), prox = new Date(ano, mes + 1, 1);
@@ -1303,7 +1303,7 @@ function fichaBrand(d) {
     "</div></div></div>" + peForm("Salvar", novo ? "" : 'data-acao="apagar-brand" data-id="' + attr(b.id) + '"') + "</form>";
 }
 function formEntrega(d) {
-  var e = d.item || { marcaId: d.marcaId || "", autorizacaoId: d.autId || "", produto: d.produto || "post", data: d.data || hojeISO(), titulo: "", link: "", rede: "instagram_facebook", status: "publicado", metricas: {}, imagem: "" };
+  var e = d.item || { marcaId: d.marcaId || "", autorizacaoId: d.autId || "", produto: d.produto || "post", data: d.data || hojeISO(), titulo: "", link: "", rede: "instagram_facebook", status: d.status || "publicado", metricas: {}, imagem: "" };
   var m = e.metricas || {};
   var auts = opcoesAuts(e.marcaId, "Sem autorização (não conta na cota)");
   var metricas = "";
@@ -1632,6 +1632,7 @@ function aoClicar(ev) {
     case "ficha-aut": S.fichaAut = id; return render();
     case "ficha-aba": S.fichaAba = v; return render();
     case "cal-mes": S.calMes = v; return render();
+    case "cal-dia": { var diaCal = el.getAttribute("data-dia"); S.dialogo = { tipo: "entrega", item: null, marcaId: "", produto: "post", autId: "", data: diaCal, status: diaCal > hojeISO() ? "agendado" : "publicado" }; return render(); }
     case "toggle-veiculados": S.mostrarVeiculados = !S.mostrarVeiculados; return render();
     case "visao-brand": S.visaoBrand = v; return render();
     case "filtro-brand-bola": S.filtroBrandBola = S.filtroBrandBola === v && FASES_BRAND.some(function (f) { return f.id === v; }) ? "todos" : v; return render();
