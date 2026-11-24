@@ -733,6 +733,7 @@ function cartaoFila(f) {
   return '<div class="fila-card' + (dias >= 5 ? " urgente" : dias >= 2 ? " atencao" : "") + '" draggable="true" data-fila-id="' + attr(f.id) + '" data-acao="editar-fila" data-id="' + attr(f.id) + '">' +
     '<div class="row between" style="flex-wrap:nowrap"><strong>' + esc(nomeMarca(f.marcaId)) + ' <span class="muted" style="font-weight:400">· ' + esc(f.descricao || PRODUTOS[f.produto].nome) + '</span></strong><span class="small nowrap" style="color:' + corDias + '">' + (dias ? dias + " dia" + (dias > 1 ? "s" : "") : "hoje") + "</span></div>" +
     '<div class="small muted">' + tagProduto(f.produto) + (f.dataPedida ? ' · <span style="' + (risco ? "color:var(--erro);font-weight:600" : "") + '">cliente pediu ' + fmtDataExtensa(f.dataPedida) + "</span>" : " · sem data pedida") + (f.urgencia === "urgente" ? ' · <span style="color:var(--erro)">urgente</span>' : "") + (f.por ? " · " + esc(f.por) : "") + (f.origem ? " · " + esc(ORIGENS[f.origem] || f.origem) : "") + "</div>" +
+    ((f.anexos || []).some(function (x) { return x.doDrive; }) ? '<div class="small" style="color:var(--info)">' + icone("folder") + " O robô juntou aqui " + (f.anexos.filter(function (x) { return x.doDrive; }).length === 1 ? "1 arquivo" : f.anexos.filter(function (x) { return x.doDrive; }).length + " arquivos") + " da pasta do Drive</div>" : "") +
     (f.driveId ? '<div class="small" style="color:var(--info)">' + icone("folder") + " Lançado pelo robô" + (f.drivePasta ? " · pasta " + esc(f.drivePasta) : "") + (!f.marcaId ? ' · <span style="color:var(--erro)">escolha a marca na ficha</span>' : "") + "</div>" : "") +
     (c.total ? '<div class="chips" style="gap:4px">' + (CHECKLIST[f.produto] || []).map(function (it) { var ok = f.checklist && f.checklist[it[0]]; return '<span class="selo ' + (ok ? "ok" : "erro") + '" style="height:20px;font-size:10.5px">' + (ok ? "" : "falta ") + esc(it[1].toLowerCase()) + "</span>"; }).join("") + "</div>" : "") +
     '<div class="row small">' + (f.linkMaterial ? linkExterno(f.linkMaterial, "Material") : "") + (f.linkDestino ? linkExterno(f.linkDestino, "Link parametrizado") : "") + (f.anexos && f.anexos.length ? (f.anexos.length === 1 ? '<a href="' + attr(f.anexos[0].url) + '" target="_blank" rel="noopener" class="row" style="gap:4px">' + icone("paperclip") + esc(f.anexos[0].nome) + "</a>" : '<span class="row" style="gap:4px">' + icone("paperclip") + f.anexos.length + " arquivos</span>") : "") + "</div>" +
@@ -1339,7 +1340,7 @@ function fmtTamanho(b) { b = +b || 0; return b >= 1073741824 ? (b / 1073741824).
 function anexosDoDialogo(d, f) { if (!d.anexos) d.anexos = clone((f && f.anexos) || []); return d.anexos; }
 function htmlAnexos(d) {
   var lista = d.anexos || [], env = d.enviando || [];
-  return lista.map(function (a, i) { return '<div class="anexo"><span class="nome">' + icone("paperclip") + '<a href="' + attr(a.url) + '" target="_blank" rel="noopener">' + esc(a.nome) + '</a></span><span class="small muted nowrap">' + fmtTamanho(a.tamanho) + '</span><button type="button" class="btn p icone fantasma" data-acao="tirar-anexo" data-i="' + i + '" title="Tirar este arquivo">' + icone("x") + "</button></div>"; }).join("") +
+  return lista.map(function (a, i) { return '<div class="anexo"><span class="nome">' + icone("paperclip") + '<a href="' + attr(a.url) + '" target="_blank" rel="noopener">' + esc(a.nome) + '</a></span><span class="small muted nowrap">' + (a.doDrive ? "juntado pelo robô · " : "") + fmtTamanho(a.tamanho) + '</span><button type="button" class="btn p icone fantasma" data-acao="tirar-anexo" data-i="' + i + '" title="' + (a.doDrive ? "Desligar este arquivo do item (ele continua na pasta do Drive)" : "Tirar este arquivo") + '">' + icone("x") + "</button></div>"; }).join("") +
     env.map(function (e) { return '<div class="anexo enviando"><span class="nome">' + icone("upload") + esc(e.nome) + '</span><span class="small muted nowrap">' + (e.erro ? '<span style="color:var(--erro)">não subiu</span>' : Math.round((e.pct || 0) * 100) + "%") + "</span></div>"; }).join("");
 }
 function campoAnexos(d, f) {
@@ -1384,7 +1385,8 @@ function enviarAnexosFila(files) {
     }).catch(function (e) { env.erro = true; atualizarAnexosNaTela(); toast("Não subiu " + file.name + ": " + e.message, true); });
   });
 }
-function tirarDoDrive(a) { if (a && a.driveId) ponteDrive("lixeira", { id: a.driveId }).catch(function () {}); }
+// arquivo que o robô juntou veio direto da pasta do Drive (doDrive): tirar daqui só desliga do item, não apaga o arquivo da pasta
+function tirarDoDrive(a) { if (a && a.driveId && !a.doDrive) ponteDrive("lixeira", { id: a.driveId }).catch(function () {}); }
 function formAlocar(d) {
   var f = d.item;
   return '<form class="dialogo" data-form="alocar">' + cabDialogo("Dar data: " + nomeMarca(f.marcaId), f.descricao) + '<div class="corpo">' +

@@ -45,6 +45,7 @@ async function prepararIA() {
   } catch (e) { console.log("Leitura com IA desligada: " + (e.message || e)); claude = null; }
 }
 const MAX_IA = 25; // arquivos lidos com IA por rodada
+const MARGEM_MIN = 20; // arquivo mais novo que isso espera a próxima rodada
 async function baixarConteudo(a) {
   const mime = a.mimeType || ""; const tam = +a.size || 0;
   if (mime === "application/vnd.google-apps.document") {
@@ -61,7 +62,7 @@ async function baixarConteudo(a) {
 const CHECK_IA = { post: ["arte", "legenda", "link"], email: ["html", "assunto", "link"], banner: ["link"], revista: ["pdf"], brand: [] };
 
 const PASTA = "application/vnd.google-apps.folder";
-const CAMPOS = "nextPageToken, files(id, name, mimeType, modifiedTime, webViewLink, size, parents)";
+const CAMPOS = "nextPageToken, files(id, name, mimeType, modifiedTime, createdTime, webViewLink, size, parents)";
 
 function hojeISO() { return new Date().toISOString().slice(0, 10); }
 function normalizar(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim(); }
@@ -111,6 +112,20 @@ function adivinharProduto(nome, mime) {
   return "post";
 }
 
+// A subpasta do produto dentro da marca (as mesmas que o site cria) diz o produto com certeza
+const PASTAS_PRODUTO = { "posts publicidade": "post", "brand youtube": "brand", "e mail marketing": "email", "paginas de revista": "revista", "banner no site": "banner" };
+function produtoPelaPasta(caminho) { for (const c of caminho.slice(1)) { const p = PASTAS_PRODUTO[normalizar(c)]; if (p) return p; } return null; }
+function diasEntre(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
+// Material que alguém já lançou na fila (mesma marca e mesmo produto, ainda em andamento ou publicado há poucos dias):
+// o arquivo do Drive é juntado nele, em vez de virar um segundo item do mesmo material
+function acharItemAberto(fila, marcaId, produto, hoje) {
+  const cands = fila.filter(f => f.marcaId === marcaId && f.produto === produto && diasEntre(f.criadoEm || hoje, hoje) <= 45 &&
+    (f.status === "aguardando" || f.status === "alocado" || (f.status === "publicado" && f.dataAlocada && diasEntre(f.dataAlocada, hoje) <= 3)));
+  if (!cands.length) return null;
+  const peso = f => f.status === "alocado" ? Math.abs(diasEntre(f.dataAlocada || hoje, hoje)) : f.status === "aguardando" ? 20 + diasEntre(f.criadoEm || hoje, hoje) : 100;
+  return cands.sort((a, b) => peso(a) - peso(b))[0];
+}
+
 function checklistInicial(produto, mime, nome) {
   const c = {};
   if (produto === "post") { c.arte = mime.startsWith("image/") || mime.startsWith("video/"); c.legenda = /legenda|copy|texto/.test(normalizar(nome)) || mime.includes("document"); c.link = false; }
@@ -142,28 +157,41 @@ async function main() {
   const raiz = await acharPastaRaiz();
   const [marcasSnap, filaSnap] = await Promise.all([db.collection("marcas").get(), db.collection("fila").get()]);
   const marcas = marcasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const jaNaFila = new Map(); const anexados = new Set();
-  filaSnap.docs.forEach(d => { const f = d.data(); if (f.driveId) jaNaFila.set(f.driveId, { id: d.id, ...f }); (f.anexos || []).forEach(x => { if (x.driveId) anexados.add(x.driveId); }); });
+  const jaNaFila = new Map(); const anexados = new Set(); const fila = [];
+  filaSnap.docs.forEach(d => { const f = { id: d.id, ...d.data() }; fila.push(f); if (f.driveId) jaNaFila.set(f.driveId, f); (f.anexos || []).forEach(x => { if (x.driveId) anexados.add(x.driveId); }); });
+  const hoje = hojeISO(); const recente = new Date(inicio.getTime() - MARGEM_MIN * 60000);
 
   const arquivos = await varrer(raiz);
   console.log(`Pasta ${raiz.name}: ${arquivos.length} arquivos, ${marcas.length} marcas, ${jaNaFila.size} já lançados.`);
 
-  let novos = 0, atualizados = 0, semMarca = 0;
+  let novos = 0, atualizados = 0, semMarca = 0, juntados = 0;
   for (const a of arquivos) {
-    const modificado = new Date(a.modifiedTime);
+    // arquivo arrastado para o Drive guarda a data antiga de modificação: o que vale é quando chegou na pasta
+    const modificado = new Date(Math.max(new Date(a.modifiedTime), new Date(a.createdTime || a.modifiedTime)));
     if (anexados.has(a.id)) continue; // anexado pelo site num item da fila: já está lá
     const existente = jaNaFila.get(a.id);
     if (existente) {
       // arquivo trocado depois de lançado: anota, sem mexer no que o time já editou
-      if (existente.driveModificadoEm && modificado > new Date(existente.driveModificadoEm) && existente.status === "aguardando") {
+      if (existente.driveModificadoEm && new Date(a.modifiedTime) > new Date(existente.driveModificadoEm) && existente.status === "aguardando") {
         await db.collection("fila").doc(existente.id).update({ driveModificadoEm: a.modifiedTime, driveNome: a.name, obs: ((existente.obs || "") + `\nArquivo atualizado no Drive em ${hojeISO()}.`).trim(), roboEm: inicio.toISOString() });
         atualizados++;
       }
       continue;
     }
     if (modificado < desde) continue;
+    if (modificado > recente) continue; // acabou de chegar: pode ser anexo do site que a pessoa ainda não salvou. Fica para a próxima rodada
     const nomeMarca = a.caminho[0] || ""; const marca = acharMarca(marcas, nomeMarca);
-    const produto = adivinharProduto(a.name, a.mimeType || "");
+    const daPasta = produtoPelaPasta(a.caminho);
+    const produto = daPasta || adivinharProduto(a.name, a.mimeType || "");
+    const juntar = async (alvo, prod) => {
+      const anexo = { nome: a.name, tamanho: +a.size || 0, tipo: a.mimeType || "", url: a.webViewLink || "", driveId: a.id, marca: marca.nome, enviadoEm: inicio.toISOString(), doDrive: true };
+      alvo.anexos = (alvo.anexos || []).concat([anexo]);
+      const mudar = { anexos: alvo.anexos, roboEm: inicio.toISOString(), roboJuntouEm: hoje };
+      if (!alvo.linkMaterial) { alvo.linkMaterial = a.webViewLink || ""; mudar.linkMaterial = alvo.linkMaterial; }
+      await db.collection("fila").doc(alvo.id).update(mudar); anexados.add(a.id); juntados++;
+      console.log(`= ${a.name} juntado em um item de ${prod} que já estava na fila (${marca.nome})`);
+    };
+    if (marca && daPasta) { const alvo = acharItemAberto(fila, marca.id, daPasta, hoje); if (alvo) { await juntar(alvo, daPasta); continue; } }
     const id = "fila-drive-" + a.id.slice(0, 12);
     const item = {
       id, marcaId: marca ? marca.id : "", produto, descricao: a.name.replace(/\.[a-z0-9]{2,5}$/i, ""),
@@ -177,20 +205,22 @@ async function main() {
         const conteudo = await baixarConteudo(a).catch(() => null);
         const { dados: r } = await ia.classificarMaterial(claude, { arquivo: conteudo && conteudo.data, mime: conteudo && conteudo.mime, nome: a.name, pasta: a.caminho.join(" / "), marcas: marcas.map((m) => m.nome) });
         lidosIA++;
-        item.produto = r.produto; item.descricao = r.descricao || item.descricao;
+        item.produto = daPasta || r.produto; item.descricao = r.descricao || item.descricao;
         if (!marca && r.marca) { const mm = marcas.find((m) => m.nome === r.marca); if (mm) { item.marcaId = mm.id; item.obs = item.obs.replace(" (marca não reconhecida, escolha na ficha)", " (marca reconhecida pela IA, confira)"); } }
-        const ck = {}; (CHECK_IA[r.produto] || []).forEach((k) => { if (r[k] != null) ck[k] = !!r[k]; });
-        if (r.produto === "banner") ck.pecas = true; if (r.produto === "brand") ck.material = true;
-        item.checklist = Object.assign(checklistInicial(r.produto, a.mimeType || "", a.name), ck);
+        const ck = {}; (CHECK_IA[item.produto] || []).forEach((k) => { if (r[k] != null) ck[k] = !!r[k]; });
+        if (item.produto === "banner") ck.pecas = true; if (item.produto === "brand") ck.material = true;
+        item.checklist = Object.assign(checklistInicial(item.produto, a.mimeType || "", a.name), ck);
         if (r.falta && r.falta.length) item.obs += "\nFalta, segundo a IA: " + r.falta.join("; ") + ".";
         item.lidoComIA = true;
       } catch (e) { console.warn("IA não leu", a.name, e.message); }
     }
-    await db.collection("fila").doc(id).set(item); novos++; if (!item.marcaId) semMarca++;
-    console.log(`+ ${item.descricao} (${produto}) → ${marca ? marca.nome : "sem marca"} [${a.caminho.join(" / ")}]`);
+    // sem subpasta de produto, o produto só fica certo depois da leitura: confere de novo se o material já está na fila
+    if (marca && !daPasta) { const alvo2 = acharItemAberto(fila, marca.id, item.produto, hoje); if (alvo2) { await juntar(alvo2, item.produto); continue; } }
+    await db.collection("fila").doc(id).set(item); fila.push(item); jaNaFila.set(a.id, item); novos++; if (!item.marcaId) semMarca++;
+    console.log(`+ ${item.descricao} (${item.produto}) → ${marca ? marca.nome : "sem marca"} [${a.caminho.join(" / ")}]`);
   }
-  await estadoRef.set({ ultimaVarredura: inicio.toISOString(), pasta: raiz.name, pastaId: raiz.id, arquivos: arquivos.length, novos, atualizados, semMarca, erro: null }, { merge: true });
-  console.log(`Pronto: ${novos} novos, ${atualizados} atualizados, ${semMarca} sem marca.`);
+  await estadoRef.set({ ultimaVarredura: recente.toISOString(), pasta: raiz.name, pastaId: raiz.id, arquivos: arquivos.length, novos, atualizados, juntados, semMarca, erro: null }, { merge: true });
+  console.log(`Pronto: ${novos} novos, ${juntados} juntados em itens que já existiam, ${atualizados} atualizados, ${semMarca} sem marca.`);
 }
 
 main().catch(async e => {
